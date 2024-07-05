@@ -4,14 +4,20 @@
 #include <fstream>
 #include <portaudio.h>
 
-#include "MP3Decoder.hpp"
+#include "MP3/Decoder.hpp"
 
 
 #define SAMPLE_RATE   (44100)
 
 
 struct PortAudio {//TODO:renommer
-    PortAudio(std::vector<uint16_t> &&data) : _result(Pa_Initialize()), _stream(nullptr), _data(std::move(data)), _currentPosition(0), _isPlaying(false) {
+    PortAudio(MP3::Decoder &decoder, std::istream &inputStream) : _result(Pa_Initialize()), _stream(nullptr), _decoder(decoder), _inputStream(inputStream), _currentFrameIndex(0), _currentPositionInFrame(0), _isPlaying(false) {
+        _currentFramePCMValues.resize(4);//TODO: selon le nombre de canaux !
+
+        _numberOfFrames = _decoder.getNumberOfFrames(_inputStream);
+
+        std::cout << "Is valid MP3 = " << (_decoder.isValidFormat(_inputStream, 3) ? "YES" : "NO") << "\n";
+        std::cout << "Number of frames = " << _numberOfFrames << "\n";
     }
 
     ~PortAudio() {
@@ -36,7 +42,7 @@ struct PortAudio {//TODO:renommer
         }
 
         outputParameters.channelCount = 2;       /* stereo output */
-        outputParameters.sampleFormat = paInt16; /* 16 bit integer output */
+        outputParameters.sampleFormat = paFloat32; /* 32 bit float output */
         outputParameters.suggestedLatency = Pa_GetDeviceInfo(outputParameters.device)->defaultLowOutputLatency;
         outputParameters.hostApiSpecificStreamInfo = nullptr;
 
@@ -98,18 +104,43 @@ struct PortAudio {//TODO:renommer
 private:
     /* The instance callback, where we have access to every method/variable in object of class Sine */
     int paCallbackMethod(void const *inputBuffer, void *outputBuffer, unsigned long framesPerBuffer, PaStreamCallbackTimeInfo const *timeInfo, PaStreamCallbackFlags statusFlags) {
-        uint16_t *out = static_cast<uint16_t *>(outputBuffer);
+        float *out = static_cast<float *>(outputBuffer);
 
         (void) timeInfo; /* Prevent unused variable warnings. */
         (void) statusFlags;
         (void) inputBuffer;
 
-        for (unsigned long i = 0; (i < framesPerBuffer) && (_currentPosition < _data.size()); i++) {
-            *out++ = _data[_currentPosition++];
-            *out++ = _data[_currentPosition++];
+        // Fill buffer
+        for (unsigned int i = 0; (i < framesPerBuffer) && (_currentFrameIndex < _numberOfFrames); i++) {
+            // Get a new frame if necessary
+            if (_currentPositionInFrame == 0) {
+                // Check if stream is good
+                if (_inputStream.good() == false) {
+                    return paAbort;
+                }
+
+                // Get current frame
+                auto frame = _decoder.getFrameAtIndex(_inputStream, _currentFrameIndex);
+                for (unsigned int i = 0; i < 4; ++i) {
+                    _currentFramePCMValues[i] = frame.getPCMSamples(i / 2, i % 2);
+                }
+
+                // Go to next frame
+                ++_currentFrameIndex;
+            }
+
+            unsigned int granuleIndex = (_currentPositionInFrame > 575) ? 1 : 0;
+            *out++ = _currentFramePCMValues[(granuleIndex * 2) + 0][_currentPositionInFrame - (576 * granuleIndex)];
+            *out++ = _currentFramePCMValues[(granuleIndex * 2) + 1][_currentPositionInFrame - (576 * granuleIndex)];
+
+            ++_currentPositionInFrame;
+            if (_currentPositionInFrame > 1151) {
+                _currentPositionInFrame = 0;
+            }
         }
 
-        return (_currentPosition < _data.size()) ? paContinue : paComplete;
+        // Check if continue or not
+        return (_currentFrameIndex < _numberOfFrames) ? paContinue : paComplete;
     }
 
     void paStreamFinishedMethod() {
@@ -135,8 +166,12 @@ private:
 
     PaError _result;
     PaStream *_stream;
-    std::vector<uint16_t> _data;
-    int _currentPosition;
+    MP3::Decoder _decoder;
+    std::istream &_inputStream;
+    unsigned int _currentFrameIndex;
+    unsigned int _numberOfFrames;
+    unsigned int _currentPositionInFrame;
+    std::vector<std::array<float, 576>> _currentFramePCMValues;
     bool _isPlaying;
 };
 
@@ -174,23 +209,22 @@ error:
     fprintf( stderr, "An error occurred while using the portaudio stream\n" );
     return 1;*/
 
-    std::ifstream mp3Stream("01.mp3", std::ios::binary);
-
-    mp3Stream.clear();
-    mp3Stream.seekg(0);
+    std::ifstream mp3Stream("Stereo.mp3", std::ios::binary);
 
     MP3::Decoder mp3Decoder;
 
-    int size = 0;
-    while ((mp3Stream.eof() == false) && (mp3Stream.good())) {
-        auto frameHeader = mp3Decoder.getNextFrame(mp3Stream);
-        int i = mp3Decoder.getFrameSize(frameHeader);
-        size += i;
+    PortAudio portAudio(mp3Decoder, mp3Stream);
 
-        mp3Stream.seekg(i - 4, std::ios_base::cur);
+    if (portAudio.open(Pa_GetDefaultOutputDevice())) {
+        if (portAudio.start()) {
 
-        std::cout << (mp3Stream.tellg() / 10000) << "\n";
+            for (; portAudio.isPlaying();) {
+                Pa_Sleep(1000);
+            }
+
+            portAudio.stop();
+        }
+
+        portAudio.close();
     }
-
-    std::cout << size << "\n";
 }
