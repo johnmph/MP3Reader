@@ -64,7 +64,7 @@ namespace MP3::Frame {
         // Get scaleFactor
         for (unsigned int channelIndex = 0; channelIndex < nbrChannels; ++channelIndex) {
             for (unsigned int scaleFactorShareIndex = 0; scaleFactorShareIndex < 4; ++scaleFactorShareIndex) {
-                _scaleFactorShare[(channelIndex * 4) + scaleFactorShareIndex] = Helper::getBitsAtIndex(data, dataBitIndex, 1);
+                _scaleFactorShare[(channelIndex * 4) + scaleFactorShareIndex] = Helper::getBitsAtIndex(data, dataBitIndex, 1) != 0;
             }
         }
 

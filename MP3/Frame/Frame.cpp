@@ -12,6 +12,9 @@ static bool _isInitialized = false;
 namespace MP3::Frame {
 std::vector<std::array<float, 1024>> Frame::_shiftedAndMatrixedSubbandsValues;
     Frame::Frame(Header const &header, SideInformation const &sideInformation, unsigned int const ancillaryDataSizeInBits, std::vector<uint8_t> const &data) : _header(header), _sideInformation(sideInformation), _data(data), _dataBitIndex(0) {
+        // Resize scaleFactors vector (always 2 granules but variable number of channels)
+        _scaleFactors.resize(2 * _header.getNumberOfChannels());
+
         // Resize frequencyLineValues vector (always 2 granules but variable number of channels)
         _frequencyLineValues.resize(2 * _header.getNumberOfChannels());
 
@@ -80,8 +83,12 @@ _isInitialized = true;
     }
 
     void Frame::extractScaleFactors(unsigned int const granuleIndex, unsigned int const channelIndex) {
+        //TODO: If short windows are switched on, i.e. block-type==2 for one of the granules, then scfsi is always 0 for this frame : voir si c'est certifié par l'encoder ou si c'est ici qu'il faut le mettre a 0
         // Get current granule
         auto const &currentGranule = _sideInformation.getGranule(granuleIndex, channelIndex);
+
+        // Get current scaleFactors vector
+        auto &currentScaleFactors = _scaleFactors[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
 
         // If we have 3 short windows
         if (currentGranule.blockType == BlockType::ShortWindows3) {
@@ -89,22 +96,22 @@ _isInitialized = true;
             if (std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).mixedBlockFlag == true) {
                 // Browse scaleFactor bands 0 to 7 for long window
                 for (unsigned int scaleFactorBandIndex = 0; scaleFactorBandIndex < 8; ++scaleFactorBandIndex) {
-                    _scaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, currentGranule.sLen1);
+                    currentScaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, currentGranule.sLen1);
                 }
 
                 // Browse scaleFactor bands 3 to 11 for short window
                 for (unsigned int scaleFactorBandIndex = 3; scaleFactorBandIndex < 12; ++scaleFactorBandIndex) {
                     // Browse windows
                     for (unsigned int windowIndex = 0; windowIndex < 3; ++windowIndex) {
-                        _scaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
+                        currentScaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
                     }
-                }                        
+                }
             } else {
                 // Browse scaleFactor bands 0 to 11 for short window
                 for (unsigned int scaleFactorBandIndex = 0; scaleFactorBandIndex < 12; ++scaleFactorBandIndex) {
                     // Browse windows
                     for (unsigned int windowIndex = 0; windowIndex < 3; ++windowIndex) {
-                        _scaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
+                        currentScaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
                     }
                 }
             }
@@ -113,7 +120,10 @@ _isInitialized = true;
             for (unsigned int scaleFactorBandIndex = 0; scaleFactorBandIndex < 21; ++scaleFactorBandIndex) {
                 // If we don't share or if we are in first granule
                 if ((_sideInformation.getScaleFactorShare(channelIndex, getScaleFactorShareGroupForScaleFactorBand(scaleFactorBandIndex)) == false) || (granuleIndex == 0)) {
-                    _scaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, (scaleFactorBandIndex < 11) ? currentGranule.sLen1 : currentGranule.sLen2);
+                    currentScaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, (scaleFactorBandIndex < 11) ? currentGranule.sLen1 : currentGranule.sLen2);
+                } else {
+                    // Share with first granule
+                    currentScaleFactors.longWindow[scaleFactorBandIndex] = _scaleFactors[channelIndex].longWindow[scaleFactorBandIndex];
                 }
             }
         }
@@ -128,97 +138,88 @@ _isInitialized = true;
 
         // Get current starting Rzero frequency line index
         auto &currentStartingRzeroFrequencyLineIndex = _startingRzeroFrequencyLineIndexes[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
-        currentStartingRzeroFrequencyLineIndex = 0;
 
         // Browse all frequency lines
-        for (unsigned int frequencyLineIndex = 0; frequencyLineIndex < 576; ++frequencyLineIndex) {//TODO: 576 dans une const
-            // Start with bigValues
-            if (frequencyLineIndex < (currentGranule.bigValues * 2)) {
-                // Get current region
-                auto const currentRegion = getBigValuesRegionForFrequencyLineIndex(currentGranule, frequencyLineIndex);
+        unsigned int frequencyLineIndex = 0;
 
-                // Get huffman table index
-                auto const huffmanTableIndex = currentGranule.tableSelect[currentRegion];
+        // Start with bigValues
+        // TODO: par apres, une fois trouvé les bugs, mettre la condition d'arret a 575
+        for (; (frequencyLineIndex < (currentGranule.bigValues * 2)) && (frequencyLineIndex < 576); frequencyLineIndex += 2) {//TODO: 576 dans une const
+            // Get current region
+            auto const currentRegion = getBigValuesRegionForFrequencyLineIndex(currentGranule, frequencyLineIndex);
 
-                Data::QuantizedValuePair decodedValue = { 0, 0 };
+            // Get huffman table index
+            auto const huffmanTableIndex = currentGranule.tableSelect[currentRegion];
+if ((huffmanTableIndex == 4) || (huffmanTableIndex == 14)) {
+int y = 0;
+}
 
-                // If huffman table is zero, don't read in stream but set all the region to 0
-                if (huffmanTableIndex > 0) {//TODO: a voir si ainsi
-                    // Get huffman table
-                    auto const &huffmanData = Data::bigValuesData[huffmanTableIndex];
+            Data::QuantizedValuePair decodedValue = { 0, 0 };
 
-                    // Decode data
-                    decodedValue = decodeHuffmanCode(currentGranule.par23Length, granuleStartDataBitIndex, huffmanData.table);
+            // If huffman table is zero, don't read in stream but set all the region to 0
+            if (huffmanTableIndex > 0) {//TODO: a voir si ainsi
+                // Get huffman table
+                auto const &huffmanData = Data::bigValuesData[huffmanTableIndex];
 
-                    // Correct data
-                    decodedValue.x = huffmanCodeApplyLinbitsAndSign(decodedValue.x, huffmanData.linbits);
-                    decodedValue.y = huffmanCodeApplyLinbitsAndSign(decodedValue.y, huffmanData.linbits);
-                }
+                // Decode data
+                decodedValue = decodeHuffmanCode(currentGranule.par23Length, granuleStartDataBitIndex, huffmanData.table);
 
-                // Add to currentFrequencyLineValues
+                // Correct data
+                decodedValue.x = huffmanCodeApplyLinbitsAndSign(decodedValue.x, huffmanData.linbits);
+                decodedValue.y = huffmanCodeApplyLinbitsAndSign(decodedValue.y, huffmanData.linbits);
+            }
+
+            // Add to currentFrequencyLineValues
 if (frequencyLineIndex > 574) {
 break;
 }
-                currentFrequencyLineValues[frequencyLineIndex] = decodedValue.x;
-                ++frequencyLineIndex;
-                currentFrequencyLineValues[frequencyLineIndex] = decodedValue.y;
+            currentFrequencyLineValues[frequencyLineIndex] = decodedValue.x;
+            currentFrequencyLineValues[frequencyLineIndex + 1] = decodedValue.y;
+        }
+
+        // Then we have Count1 values
+        // TODO: par apres, une fois trouvé les bugs, mettre la condition d'arret a 573
+        for (; ((_dataBitIndex - granuleStartDataBitIndex) < currentGranule.par23Length) && (frequencyLineIndex < 576); frequencyLineIndex += 4) {
+            Data::QuantizedValueQuadruple decodedValue;
+
+            // Decode value if table is A
+            if (currentGranule.isCount1TableB == false) {
+                // Decode data
+                decodedValue = decodeHuffmanCode(currentGranule.par23Length, granuleStartDataBitIndex, Data::count1TableA);
             }
-            // Then we have Count1 values
-            else if ((_dataBitIndex - granuleStartDataBitIndex) < currentGranule.par23Length) {
-if (frequencyLineIndex == 460) {
-int pp = 0;
-}
-                Data::QuantizedValueQuadruple decodedValue;
+            // Simply get 4 bits and invert them if table is B
+            else {
+                // Get data
+                decodedValue.v = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
+                decodedValue.w = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
+                decodedValue.x = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
+                decodedValue.y = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
+            }
 
-                // Decode value if table is A
-                if (currentGranule.isCount1TableB == false) {
-                    // Decode data
-                    decodedValue = decodeHuffmanCode(currentGranule.par23Length, granuleStartDataBitIndex, Data::count1TableA);
-                }
-                // Simply get 4 bits and invert them if table is B
-                else {
-                    // Get data
-                    decodedValue.v = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
-                    decodedValue.w = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
-                    decodedValue.x = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
-                    decodedValue.y = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
-                }
+            // Correct data
+            decodedValue.v = huffmanCodeApplySign(decodedValue.v);
+            decodedValue.w = huffmanCodeApplySign(decodedValue.w);
+            decodedValue.x = huffmanCodeApplySign(decodedValue.x);
+            decodedValue.y = huffmanCodeApplySign(decodedValue.y);
 
-                // Correct data
-                decodedValue.v = huffmanCodeApplySign(decodedValue.v);
-                decodedValue.w = huffmanCodeApplySign(decodedValue.w);
-                decodedValue.x = huffmanCodeApplySign(decodedValue.x);
-                decodedValue.y = huffmanCodeApplySign(decodedValue.y);
-
-                // Add to currentFrequencyLineValues
+            // Add to currentFrequencyLineValues
 if (frequencyLineIndex > 572) {
 break;
 }
-                currentFrequencyLineValues[frequencyLineIndex] = decodedValue.v;
-                ++frequencyLineIndex;
-                currentFrequencyLineValues[frequencyLineIndex] = decodedValue.w;
-                ++frequencyLineIndex;
-                currentFrequencyLineValues[frequencyLineIndex] = decodedValue.x;
-                ++frequencyLineIndex;
-                currentFrequencyLineValues[frequencyLineIndex] = decodedValue.y;
-            }
-            // Then we have Rzero values
-            else {
-                // Get starting frequency line index for Rzero if not already found
-                if (currentStartingRzeroFrequencyLineIndex == 0) {
-                    currentStartingRzeroFrequencyLineIndex = frequencyLineIndex;
-                }
-
-                // Add 0 to currentFrequencyLineValues
-                currentFrequencyLineValues[frequencyLineIndex] = 0;
-            }
+            currentFrequencyLineValues[frequencyLineIndex] = decodedValue.v;
+            currentFrequencyLineValues[frequencyLineIndex + 1] = decodedValue.w;
+            currentFrequencyLineValues[frequencyLineIndex + 2] = decodedValue.x;
+            currentFrequencyLineValues[frequencyLineIndex + 3] = decodedValue.y;
         }
 
-// TODO: dans le cas ou on dépasse 576, il n'y a pas de rzero mais voir si c normal de depasser
-if (currentStartingRzeroFrequencyLineIndex == 0) {
-    currentStartingRzeroFrequencyLineIndex = 576;
-}
+        // Then we have Rzero values
+        // Save start of Rzero values
+        currentStartingRzeroFrequencyLineIndex = frequencyLineIndex;
 
+        for (; frequencyLineIndex < 576; ++frequencyLineIndex) {
+            // Add 0 to currentFrequencyLineValues
+            currentFrequencyLineValues[frequencyLineIndex] = 0;
+        }
     }
 
     void Frame::requantizeFrequencyLineValues(unsigned int const granuleIndex, unsigned int const channelIndex) {
@@ -231,13 +232,13 @@ if (currentStartingRzeroFrequencyLineIndex == 0) {
         // Browse frequency lines
         for (unsigned int frequencyLineIndex = 0; frequencyLineIndex < 576; ++frequencyLineIndex) {//TODO: toutes les references a 576 doivent etre retirées et remplacées par un const
             // Get gainCorrection
-            unsigned int const gainCorrection = (isFrequencyLineIndexInShortBlock(currentGranule, frequencyLineIndex) == true) ? (8 * std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).subblockGain[getCurrentWindowIndexForFrequencyLineIndex(frequencyLineIndex)]) : 0;
+            unsigned int const gainCorrection = getSubblockGainForFrequencyLineIndex(currentGranule, frequencyLineIndex);
 
             // Get scaleFactor
-            unsigned int const scaleFactor = getScaleFactorForFrequencyLineIndex(currentGranule, frequencyLineIndex);
+            unsigned int const scaleFactor = getScaleFactorForFrequencyLineIndex(granuleIndex, channelIndex, currentGranule, frequencyLineIndex);
 
             // Get current value sign
-            int const currentValueSign = (currentFrequencyLineValues[frequencyLineIndex] >= 0) ? 1 : -1;
+            float const currentValueSign = (currentFrequencyLineValues[frequencyLineIndex] >= 0.0f) ? 1.0f : -1.0f;
 
             // Calculate power gain
             float const powerGain = std::pow(2.0f, static_cast<int>(currentGranule.globalGain - (210 + gainCorrection)) / 4.0f);//TODO: voir si 210 sera dans un const
@@ -275,7 +276,7 @@ if (currentStartingRzeroFrequencyLineIndex == 0) {
             auto const currentScaleFactorBandIndex = getScaleFactorBandIndexForFrequencyLineIndex(Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()], frequencyLineIndex / 3);
 
             // Get current scaleFactor band max frequency line
-            int const currentScaleFactorBandMaxFrequencyLine = Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][currentScaleFactorBandIndex];
+            int const currentScaleFactorBandMaxFrequencyLine = (currentScaleFactorBandIndex == -1) ? 191 : Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][currentScaleFactorBandIndex];//TODO: pas sur dans le cas ou == -1
 
             // Reorder
             currentFrequencyLineValues[frequencyLineIndex] = savedCurrentFrequencyLineValues[startFrequencyLineForCurrentScaleFactorBand + reorderedIndex];
@@ -357,12 +358,12 @@ if (currentStartingRzeroFrequencyLineIndex == 0) {
             // If scaleFactorBand is in current group
             if ((scaleFactorBand >= Data::scaleFactorBandsPerScaleFactorShareGroup[scaleFactorShareGroupIndex - 1]) && (scaleFactorBand < Data::scaleFactorBandsPerScaleFactorShareGroup[scaleFactorShareGroupIndex])) {
                 // Return group index
-                return scaleFactorShareGroupIndex;
+                return scaleFactorShareGroupIndex - 1;
             }
         }
 
         // Not found
-        return -1;  // TODO: attention on retourne -1 en unsigned int
+        return -1;  // TODO: attention on retourne -1 en unsigned int : thrower une exception normalement ou faire un assert au début de la methode sur scaleFactorBand < 21
     }
 
     unsigned int Frame::getBigValuesRegionForFrequencyLineIndex(SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const {
@@ -428,6 +429,19 @@ if (currentStartingRzeroFrequencyLineIndex == 0) {
         return value;
     }
 
+    unsigned int Frame::getSubblockGainForFrequencyLineIndex(SideInformationGranule const &currentGranule, unsigned int const frequencyLineIndex) const {
+        // No subblock gain for long block
+        if (isFrequencyLineIndexInShortBlock(currentGranule, frequencyLineIndex) == false) {
+            return 0;
+        }
+
+        // Get scaleFactor band index
+        auto const scaleFactorBandIndex = getScaleFactorBandIndexForFrequencyLineIndex(Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()], frequencyLineIndex / 3);
+        
+        // Return 0 if scaleFactor band index not found else return subblockGain * 8
+        return (scaleFactorBandIndex == -1) ? 0 : (8 * std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).subblockGain[getCurrentWindowIndexForFrequencyLineIndex(scaleFactorBandIndex, frequencyLineIndex)]);
+    }
+
     template <class TScaleFactorBandTable>
     unsigned int Frame::getScaleFactorBandIndexForFrequencyLineIndex(TScaleFactorBandTable const &scaleFactorBands, unsigned int const frequencyLineIndex) const {
         // Browse all scale factor bands
@@ -440,12 +454,11 @@ if (currentStartingRzeroFrequencyLineIndex == 0) {
         }
 
         // Not found
-        return -1;//TODO: a voir si on depasse si on veut garder -1 alors std::numeric_limits<unsigned int>::max()
+        return -1;
     }
 
-    unsigned int Frame::getCurrentWindowIndexForFrequencyLineIndex(unsigned int const frequencyLineIndex) const {
-        // Get scaleFactor band index
-        auto const scaleFactorBandIndex = getScaleFactorBandIndexForFrequencyLineIndex(Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()], frequencyLineIndex / 3);
+    unsigned int Frame::getCurrentWindowIndexForFrequencyLineIndex(unsigned int const scaleFactorBandIndex, unsigned int const frequencyLineIndex) const {
+        // TODO: assert sur scaleFactorBandIndex < 12
 
         // Get currentWindowIndex
         int const currentScaleFactorBandMaxFrequencyLine = Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][scaleFactorBandIndex];
@@ -454,20 +467,23 @@ if (currentStartingRzeroFrequencyLineIndex == 0) {
         return ((frequencyLineIndex / 3) - (currentScaleFactorBandLastMaxFrequencyLine + 1)) / (currentScaleFactorBandMaxFrequencyLine - currentScaleFactorBandLastMaxFrequencyLine);
     }
 
-    unsigned int Frame::getScaleFactorForFrequencyLineIndex(SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const {
+    unsigned int Frame::getScaleFactorForFrequencyLineIndex(unsigned int const granuleIndex, unsigned int const channelIndex, SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const {
+        // Get current scaleFactors vector
+        auto &currentScaleFactors = _scaleFactors[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+
         // Short block
         if (isFrequencyLineIndexInShortBlock(sideInformationGranule, frequencyLineIndex)) {
             // Get scaleFactor band index
             auto const scaleFactorBandIndex = getScaleFactorBandIndexForFrequencyLineIndex(Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()], frequencyLineIndex / 3);
 
             // Get scale factor
-            return (scaleFactorBandIndex != -1) ? _scaleFactors.shortWindow[scaleFactorBandIndex][getCurrentWindowIndexForFrequencyLineIndex(frequencyLineIndex)] : 0;//TODO: a voir pour -1
+            return (scaleFactorBandIndex != -1) ? currentScaleFactors.shortWindow[scaleFactorBandIndex][getCurrentWindowIndexForFrequencyLineIndex(scaleFactorBandIndex, frequencyLineIndex)] : 0;//TODO: a voir pour -1
         }
 
         // Long block
         // Get scale factor
         auto const scaleFactorBandIndex = getScaleFactorBandIndexForFrequencyLineIndex(Data::frequencyLinesPerScaleFactorBandLongBlock[_header.getSamplingRateIndex()], frequencyLineIndex);
-        return (scaleFactorBandIndex != -1) ? _scaleFactors.longWindow[scaleFactorBandIndex] + (sideInformationGranule.preflag * Data::pretabByScaleFactorBand[scaleFactorBandIndex]) : 0; // TODO: a voir pour -1
+        return (scaleFactorBandIndex != -1) ? (currentScaleFactors.longWindow[scaleFactorBandIndex] + (sideInformationGranule.preflag * Data::pretabByScaleFactorBand[scaleFactorBandIndex])) : 0; // TODO: a voir pour -1
     }
 
     bool Frame::isFrequencyLineIndexInShortBlock(SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const {
@@ -505,7 +521,7 @@ if (currentStartingRzeroFrequencyLineIndex == 0) {
         // Process
         for (unsigned int frequencyLineIndex = getIntensityStereoBound(granuleIndex); frequencyLineIndex < 576; ++frequencyLineIndex) {
             // Get isPosSB which is scaleFactor of the current scaleFactorBand group
-            auto const isPosSB = getScaleFactorForFrequencyLineIndex(currentGranuleRight, frequencyLineIndex);    // TODO: voir si c'est bon
+            auto const isPosSB = getScaleFactorForFrequencyLineIndex(granuleIndex, 1, currentGranuleRight, frequencyLineIndex);    // TODO: voir si c'est bon
 
             // Don't process if illegal
             if (isPosSB == 7) {
@@ -524,7 +540,7 @@ if (currentStartingRzeroFrequencyLineIndex == 0) {
         }
     }
 
-    unsigned int Frame::getIntensityStereoBound(unsigned int const granuleIndex) const {
+    unsigned int Frame::getIntensityStereoBound(unsigned int const granuleIndex) const {//TODO: attention avec currentScaleFactorBandIndex quand == -1
         // Get current granule right channel
         auto const &currentGranuleRight = _sideInformation.getGranule(granuleIndex, 1);
 
@@ -585,7 +601,7 @@ if (currentStartingRzeroFrequencyLineIndex == 0) {
         for (unsigned int i = 0; i < 36; ++i) { // TODO: toutes les constantes comme 36, 12, ... doivent etre dans des constantes
             // From 18 (6+6+6 in short block) values
             for (unsigned int k = 0; k < halfN; ++k) {
-                subbandValues[i] += frequencyLineValues[(subbandIndex * 18) + ((i / n) * halfN) + k] * /*(((granule.blockType == BlockType::ShortWindows3) && ((granule.window.special.mixedBlockFlag == false) || (subbandIndex >= 2))) ? Data::imdctShortBlock[((i % 12) * halfN) + k] : Data::imdctLongBlock[(i * halfN) + k]);/*/std::cos((M_PI / (2.0f * n)) * ((2.0f * i) + 1.0f + halfN) * ((2.0f * k) + 1.0f));
+                subbandValues[i] += frequencyLineValues[(subbandIndex * 18) + ((i / n) * halfN) + k] * /*(((sideInformationGranule.blockType == BlockType::ShortWindows3) && ((std::get<SideInformationGranuleSpecialWindow>(sideInformationGranule.window).mixedBlockFlag == false) || (subbandIndex >= 2))) ? Data::imdctShortBlock[((i % 12) * halfN) + k] : Data::imdctLongBlock[(i * halfN) + k]);/*/std::cos((M_PI / (2.0f * n)) * ((2.0f * i) + 1.0f + halfN) * ((2.0f * k) + 1.0f));
             }
         }
     }
@@ -633,13 +649,15 @@ if (currentStartingRzeroFrequencyLineIndex == 0) {
     }
 
     void Frame::applyCompensationForFrequencyInversion(std::array<float, 576> &currentSubbandsValues, unsigned int const subbandIndex) {
+        // Only process odd indexes
+        if ((subbandIndex % 2) == 0) {
+            return;
+        }
+
         // Process frequency inversion
         // Only on odd indexes
         for (unsigned int i = 1; i < 18; i += 2) {
-            // Only on odd indexes
-            if ((subbandIndex % 2) == 1) {//TODO: sortir la condition de la boucle et sortir directement de la methode si pair
-                currentSubbandsValues[(subbandIndex * 18) + i] *= -1.0f;
-            }
+            currentSubbandsValues[(subbandIndex * 18) + i] *= -1.0f;
         }
     }
 

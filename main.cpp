@@ -12,7 +12,7 @@
 
 struct PortAudio {//TODO:renommer
     PortAudio(MP3::Decoder &decoder, std::istream &inputStream) : _result(Pa_Initialize()), _stream(nullptr), _decoder(decoder), _inputStream(inputStream), _currentFrameIndex(0), _currentPositionInFrame(0), _isPlaying(false) {
-        _currentFramePCMValues.resize(4);//TODO: selon le nombre de canaux !
+        _currentFramePCMValues.resize(/*4*/2);//TODO: selon le nombre de canaux !
 
         _numberOfFrames = _decoder.getNumberOfFrames(_inputStream);
 
@@ -41,7 +41,7 @@ struct PortAudio {//TODO:renommer
             std::cout << "Output device name : " << pInfo->name << "\n";
         }
 
-        outputParameters.channelCount = 2;       /* stereo output */
+        outputParameters.channelCount = /*2*/1;       /* stereo output */
         outputParameters.sampleFormat = paFloat32; /* 32 bit float output */
         outputParameters.suggestedLatency = Pa_GetDeviceInfo(outputParameters.device)->defaultLowOutputLatency;
         outputParameters.hostApiSpecificStreamInfo = nullptr;
@@ -121,8 +121,8 @@ private:
 
                 // Get current frame
                 auto frame = _decoder.getFrameAtIndex(_inputStream, _currentFrameIndex);
-                for (unsigned int i = 0; i < 4; ++i) {
-                    _currentFramePCMValues[i] = frame.getPCMSamples(i / 2, i % 2);
+                for (unsigned int i = 0; i < /*4*/2; ++i) {
+                    _currentFramePCMValues[i] = frame.getPCMSamples(/*i / 2, i % 2*/i, 0);
                 }
 
                 // Go to next frame
@@ -130,8 +130,8 @@ private:
             }
 
             unsigned int granuleIndex = (_currentPositionInFrame > 575) ? 1 : 0;
-            *out++ = _currentFramePCMValues[(granuleIndex * 2) + 0][_currentPositionInFrame - (576 * granuleIndex)];
-            *out++ = _currentFramePCMValues[(granuleIndex * 2) + 1][_currentPositionInFrame - (576 * granuleIndex)];
+            *out++ = _currentFramePCMValues[/*(granuleIndex * 2) + 0*/granuleIndex][_currentPositionInFrame - (576 * granuleIndex)];
+            //*out++ = _currentFramePCMValues[(granuleIndex * 2) + 1][_currentPositionInFrame - (576 * granuleIndex)];
 
             ++_currentPositionInFrame;
             if (_currentPositionInFrame > 1151) {
@@ -209,7 +209,7 @@ error:
     fprintf( stderr, "An error occurred while using the portaudio stream\n" );
     return 1;*/
 
-    std::ifstream mp3Stream("Stereo.mp3", std::ios::binary);
+    std::ifstream mp3Stream("Mono_cbr.mp3", std::ios::binary);
 
     MP3::Decoder mp3Decoder;
 

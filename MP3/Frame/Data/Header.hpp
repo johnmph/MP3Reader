@@ -2,7 +2,6 @@
 #define MP3_FRAME_DATA_HEADER_HPP
 
 #include <array>
-#include <limits>
 
 
 namespace MP3::Frame::Data {
@@ -23,14 +22,14 @@ namespace MP3::Frame::Data {
         224,
         256,
         320,
-        std::numeric_limits<unsigned int>::max()//TODO: -1 ?
+        static_cast<unsigned int>(-1)
     };
 
     constexpr std::array<unsigned int, 4> samplingRates = {
         44100,
         48000,
         32000,
-        std::numeric_limits<unsigned int>::max()
+        static_cast<unsigned int>(-1)
     };
 
 }

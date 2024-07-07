@@ -12,7 +12,7 @@ namespace MP3::Helper {
     std::vector<uint8_t> getDataFromStream(std::istream &inputStream, unsigned int sizeInBits);     //TODO: surement en octets plutot
 
     template <typename TContainer, class TFunction>
-    constexpr TContainer transformContainer(TContainer const &input, TFunction &&function) {    //TODO: mettre le code dans un _s.hpp ?
+    constexpr TContainer transformContainer(TContainer const &input, TFunction &&function) {    //TODO: mettre le code dans un _s.hpp ? ATTENTION: si vector, taille pas initialisée
         TContainer output = {};
     
         for (std::size_t index = 0; index < input.size(); ++index) {

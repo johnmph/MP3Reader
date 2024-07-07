@@ -126,17 +126,18 @@ namespace MP3 {
 
             // Check if we have enough data
         int ee = bitReservoirCurrentFrameHeader.getDataSize();
+        int ff = bitReservoirCurrentFrameHeader.getFrameLength();
             if (bitReservoirCurrentFrameHeader.getDataSize() >= beginOffset) {
                 // Read all data
                 for (unsigned int bytesRead = 0; bytesRead < frameData.size();) {
                     // Set position of stream to data of bitReservoir current frame
                 int r = inputStream.tellg();
-                    inputStream.seekg(bitReservoirCurrentFrameHeader.getCRCSize() + bitReservoirCurrentFrameHeader.getSideInformationSize() + ((bytesRead == 0) ? (bitReservoirCurrentFrameHeader.getDataSize() - beginOffset) : 0), std::ios_base::cur);
-                int x = bitReservoirCurrentFrameHeader.getCRCSize() + bitReservoirCurrentFrameHeader.getSideInformationSize() + ((bytesRead == 0) ? (bitReservoirCurrentFrameHeader.getDataSize() - beginOffset) : 0);
+                    inputStream.seekg(bitReservoirCurrentFrameHeader.getCRCSize() + bitReservoirCurrentFrameHeader.getSideInformationSize() + (((bitReservoirCurrentFrameIndex < frameIndex) && (bytesRead == 0)) ? (bitReservoirCurrentFrameHeader.getDataSize() - beginOffset) : 0), std::ios_base::cur);
+                int x = bitReservoirCurrentFrameHeader.getCRCSize() + bitReservoirCurrentFrameHeader.getSideInformationSize() + (((bitReservoirCurrentFrameIndex < frameIndex) && (bytesRead == 0)) ? (bitReservoirCurrentFrameHeader.getDataSize() - beginOffset) : 0);
                 int r2 = inputStream.tellg();
 
                     // Calculate available bytes
-                    unsigned int const limitToRead = (bytesRead == 0) ? beginOffset : bitReservoirCurrentFrameHeader.getDataSize();
+                    unsigned int const limitToRead = ((bitReservoirCurrentFrameIndex < frameIndex) && (bytesRead == 0)) ? beginOffset : bitReservoirCurrentFrameHeader.getDataSize();
                     unsigned int const bytesAvailable = ((frameData.size() - bytesRead) > limitToRead) ? limitToRead : (frameData.size() - bytesRead);
 
                     // Read available bytes
@@ -194,6 +195,7 @@ namespace MP3 {
 
         if (synchronizeToNextFrame(inputStream, headerData, 0xFE, 0xFA) == false) {
             // TODO: exception ?
+            throw std::invalid_argument("headerBytes is incorrect");  // TODO: changer par une classe custom
         }
 
         return Frame::Header(headerData, 0xFE, 0xFA);

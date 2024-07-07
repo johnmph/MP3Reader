@@ -20,8 +20,8 @@ namespace MP3::Frame::Data {
         -0.0037f
     };
 
-    constexpr auto butterflyCoefficientCs = Helper::transformContainer(butterflyCoefficientCi, [](auto value) { return 1.0f / (std::sqrt(1 + (value * value))); });
-    constexpr auto butterflyCoefficientCa = Helper::transformContainer(butterflyCoefficientCi, [](auto value) { return value / (std::sqrt(1 + (value * value))); });
+    constexpr auto butterflyCoefficientCs = Helper::transformContainer(butterflyCoefficientCi, [](auto value) { return 1.0f / (std::sqrt(1.0f + (value * value))); });
+    constexpr auto butterflyCoefficientCa = Helper::transformContainer(butterflyCoefficientCi, [](auto value) { return value / (std::sqrt(1.0f + (value * value))); });
 
     // IMDCT
     template <typename TValue, int Size>

@@ -79,7 +79,7 @@ namespace MP3::Frame::Data {
 
         for (unsigned int i = 0; i < 64; ++i) {
             for (unsigned int k = 0; k < 32; ++k) {
-                output[i][k] = std::cos((16.0f + i) * ((2.0f * k) + 1) * (M_PI / 64.0f));
+                output[i][k] = std::cos((16.0f + i) * ((2.0f * k) + 1.0f) * (M_PI / 64.0f));
             }
         }
 

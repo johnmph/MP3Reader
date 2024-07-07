@@ -44,11 +44,13 @@ namespace MP3::Frame {
         int huffmanCodeApplyLinbitsAndSign(int value, unsigned int const linbits);
         int huffmanCodeApplySign(int value);
 
+        unsigned int getSubblockGainForFrequencyLineIndex(SideInformationGranule const &currentGranule, unsigned int const frequencyLineIndex) const;
+
         template <class TScaleFactorBandTable>
         unsigned int getScaleFactorBandIndexForFrequencyLineIndex(TScaleFactorBandTable const &scaleFactorBands, unsigned int const frequencyLineIndex) const;
 
-        unsigned int getCurrentWindowIndexForFrequencyLineIndex(unsigned int const frequencyLineIndex) const;
-        unsigned int getScaleFactorForFrequencyLineIndex(SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const;
+        unsigned int getCurrentWindowIndexForFrequencyLineIndex(unsigned int const scaleFactorBandIndex, unsigned int const frequencyLineIndex) const;
+        unsigned int getScaleFactorForFrequencyLineIndex(unsigned int const granuleIndex, unsigned int const channelIndex, SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const;
         bool isFrequencyLineIndexInShortBlock(SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const;
         void processMSStereo(unsigned int const granuleIndex);
         void processIntensityStereo(unsigned int const granuleIndex);
@@ -65,7 +67,7 @@ namespace MP3::Frame {
         SideInformation const _sideInformation;
         std::vector<uint8_t> const _data;
         unsigned int _dataBitIndex;
-        ScaleFactors _scaleFactors;
+        std::vector<ScaleFactors> _scaleFactors;
         std::vector<std::array<float, 576>> _frequencyLineValues; // TODO: int ou float ? -> normalement float
         std::vector<std::array<float, 576>> _subbandsValues;
         std::vector<std::array<float, 576>> _pcmValues;//TODO: voir si diviser par granules aussi !!!
