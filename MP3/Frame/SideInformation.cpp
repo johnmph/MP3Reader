@@ -111,6 +111,7 @@ namespace MP3::Frame {
             // Get tableSelect
             for (int i = 0; i < 2; ++i) {
                 sideInformationGranule.tableSelect.push_back(Helper::getBitsAtIndex(data, dataBitIndex, 5));
+                //TODO: thrower une exception si if ((huffmanTableIndex == 4) || (huffmanTableIndex == 14)) { ?
             }
 
             // Get subblockGain
@@ -131,6 +132,7 @@ namespace MP3::Frame {
             // Get tableSelect
             for (int i = 0; i < 3; ++i) {
                 sideInformationGranule.tableSelect.push_back(Helper::getBitsAtIndex(data, dataBitIndex, 5));
+                //TODO: thrower une exception si if ((huffmanTableIndex == 4) || (huffmanTableIndex == 14)) { ?
             }
 
             // Get region0Count

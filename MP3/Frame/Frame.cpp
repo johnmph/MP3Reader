@@ -18,9 +18,6 @@ std::vector<std::array<float, 1024>> Frame::_shiftedAndMatrixedSubbandsValues;
         // Resize frequencyLineValues vector (always 2 granules but variable number of channels)
         _frequencyLineValues.resize(2 * _header.getNumberOfChannels());
 
-        // Resize subbandsValues vector (always 2 granules but variable number of channels)
-        _subbandsValues.resize(2 * _header.getNumberOfChannels());
-
         // Resize pcmValues vector (always 2 granules but variable number of channels)
         _pcmValues.resize(2 * _header.getNumberOfChannels());
 
@@ -143,21 +140,17 @@ _isInitialized = true;
         unsigned int frequencyLineIndex = 0;
 
         // Start with bigValues
-        // TODO: par apres, une fois trouvé les bugs, mettre la condition d'arret a 575
         for (; (frequencyLineIndex < (currentGranule.bigValues * 2)) && (frequencyLineIndex < 576); frequencyLineIndex += 2) {//TODO: 576 dans une const
             // Get current region
             auto const currentRegion = getBigValuesRegionForFrequencyLineIndex(currentGranule, frequencyLineIndex);
 
             // Get huffman table index
             auto const huffmanTableIndex = currentGranule.tableSelect[currentRegion];
-if ((huffmanTableIndex == 4) || (huffmanTableIndex == 14)) {
-int y = 0;
-}
 
             Data::QuantizedValuePair decodedValue = { 0, 0 };
 
             // If huffman table is zero, don't read in stream but set all the region to 0
-            if (huffmanTableIndex > 0) {//TODO: a voir si ainsi
+            if (huffmanTableIndex > 0) {
                 // Get huffman table
                 auto const &huffmanData = Data::bigValuesData[huffmanTableIndex];
 
@@ -170,16 +163,12 @@ int y = 0;
             }
 
             // Add to currentFrequencyLineValues
-if (frequencyLineIndex > 574) {
-break;
-}
             currentFrequencyLineValues[frequencyLineIndex] = decodedValue.x;
             currentFrequencyLineValues[frequencyLineIndex + 1] = decodedValue.y;
         }
-
+        
         // Then we have Count1 values
-        // TODO: par apres, une fois trouvé les bugs, mettre la condition d'arret a 573
-        for (; ((_dataBitIndex - granuleStartDataBitIndex) < currentGranule.par23Length) && (frequencyLineIndex < 576); frequencyLineIndex += 4) {
+        for (; ((_dataBitIndex - granuleStartDataBitIndex) < currentGranule.par23Length) && (frequencyLineIndex < (576 - 3)); frequencyLineIndex += 4) {
             Data::QuantizedValueQuadruple decodedValue;
 
             // Decode value if table is A
@@ -203,9 +192,6 @@ break;
             decodedValue.y = huffmanCodeApplySign(decodedValue.y);
 
             // Add to currentFrequencyLineValues
-if (frequencyLineIndex > 572) {
-break;
-}
             currentFrequencyLineValues[frequencyLineIndex] = decodedValue.v;
             currentFrequencyLineValues[frequencyLineIndex + 1] = decodedValue.w;
             currentFrequencyLineValues[frequencyLineIndex + 2] = decodedValue.x;
@@ -249,11 +235,9 @@ break;
             // Requantize current value
             currentFrequencyLineValues[frequencyLineIndex] = currentValueSign * std::pow(std::abs(currentFrequencyLineValues[frequencyLineIndex]), 4.0f / 3.0f) * powerGain * powerScaleFactor;
         }
-
-        //TODO: voir pour les int avec float, si besoin de conversion !
     }
 
-    void Frame::reorderShortWindows(unsigned int const granuleIndex, unsigned int const channelIndex) {//TODO: voir si le reorder est correct ainsi
+    void Frame::reorderShortWindows(unsigned int const granuleIndex, unsigned int const channelIndex) {//TODO: voir si le reorder est correct ainsi : OK normalement, juste pas testé si mixedBlockFlag !
     // TODO: a la place de calculer les indexs de reorder ici, avoir des tableaux constants calculés au démarrage avec une methode constexpr ! et ici on utilisera les indexs du bon tableau reorder pour reorder les données
         // Get current granule
         auto const &currentGranule = _sideInformation.getGranule(granuleIndex, channelIndex);
@@ -275,20 +259,20 @@ break;
             // Get current scaleFactor band index
             auto const currentScaleFactorBandIndex = getScaleFactorBandIndexForFrequencyLineIndex(Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()], frequencyLineIndex / 3);
 
-            // Get current scaleFactor band max frequency line
-            int const currentScaleFactorBandMaxFrequencyLine = (currentScaleFactorBandIndex == -1) ? 191 : Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][currentScaleFactorBandIndex];//TODO: pas sur dans le cas ou == -1
+            // Get current scaleFactor band frequency line count
+            int const currentScaleFactorBandFrequencyLineCount = Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][currentScaleFactorBandIndex] - ((currentScaleFactorBandIndex > 0) ? Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][currentScaleFactorBandIndex - 1] : -1);
 
             // Reorder
             currentFrequencyLineValues[frequencyLineIndex] = savedCurrentFrequencyLineValues[startFrequencyLineForCurrentScaleFactorBand + reorderedIndex];
 
             // Update reorderedIndex
-            reorderedIndex += currentScaleFactorBandMaxFrequencyLine - ((currentScaleFactorBandIndex > 0) ? Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][currentScaleFactorBandIndex - 1] : -1);
+            reorderedIndex += currentScaleFactorBandFrequencyLineCount;
 
-            if (reorderedIndex >= ((currentScaleFactorBandMaxFrequencyLine + 1) * 3)) {
-                reorderedIndex -= ((currentScaleFactorBandMaxFrequencyLine + 1) * 3) - 1;
+            if (reorderedIndex >= (currentScaleFactorBandFrequencyLineCount * 3)) {
+                reorderedIndex -= (currentScaleFactorBandFrequencyLineCount * 3) - 1;
 
                 // The current scale factor band index is over, go to next
-                if (reorderedIndex == (currentScaleFactorBandMaxFrequencyLine + 1)) {
+                if (reorderedIndex == currentScaleFactorBandFrequencyLineCount) {
                     reorderedIndex = 0;
                     startFrequencyLineForCurrentScaleFactorBand = frequencyLineIndex + 1;
                 }
@@ -325,31 +309,28 @@ break;
         auto const &currentFrequencyLineValues = _frequencyLineValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
 
         // Get current subbands values vector
-        auto &currentSubbandsValues = _subbandsValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
-
-        // Initialize currentSubbandsValues to 0
-        std::fill(std::begin(currentSubbandsValues), std::end(currentSubbandsValues), 0.0f);//TODO: doit etre initialisé a 0, voir si pas deja via le resize dans le constructor, si non voir si pas plutot le mettre dans le constructor
+        std::array<float, 576> subbandsValues = {};
 
         // Browse subbands
-        for (unsigned int subbandIndex = 0; subbandIndex < 32; ++subbandIndex) {//TODO: a repeter 32x pour toutes les subbands ? si oui faire attention aux indexs
+        for (unsigned int subbandIndex = 0; subbandIndex < 32; ++subbandIndex) {
             // Create temporary array to keep current subband values
-            std::array<float, 36> subbandValues = {};
+            std::array<float, 36> currentSubbandValues = {};
 
             // Apply IMDCT
-            applyIMDCT(currentGranule, currentFrequencyLineValues, subbandValues, subbandIndex);
+            applyIMDCT(currentGranule, currentFrequencyLineValues, currentSubbandValues, subbandIndex);
 
             // Apply windowing
-            applyWindowing(currentGranule, subbandValues, subbandIndex);
+            applyWindowing(currentGranule, currentSubbandValues, subbandIndex);
 
             // Apply overlapping
-            applyOverlapping(subbandValues, currentSubbandsValues, subbandIndex);
+            applyOverlapping(channelIndex, currentSubbandValues, subbandsValues, subbandIndex);
 
             // Apply compensation for frequency inversion
-            applyCompensationForFrequencyInversion(currentSubbandsValues, subbandIndex);
+            applyCompensationForFrequencyInversion(subbandsValues, subbandIndex);
         }
 
         // Apply polyphase filterbank
-        applyPolyphaseFilterBank(granuleIndex, channelIndex);
+        applyPolyphaseFilterBank(granuleIndex, channelIndex, subbandsValues);
     }
 
     unsigned int Frame::getScaleFactorShareGroupForScaleFactorBand(unsigned int const scaleFactorBand) const {
@@ -439,11 +420,12 @@ break;
         auto const scaleFactorBandIndex = getScaleFactorBandIndexForFrequencyLineIndex(Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()], frequencyLineIndex / 3);
         
         // Return 0 if scaleFactor band index not found else return subblockGain * 8
-        return (scaleFactorBandIndex == -1) ? 0 : (8 * std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).subblockGain[getCurrentWindowIndexForFrequencyLineIndex(scaleFactorBandIndex, frequencyLineIndex)]);
+        return (scaleFactorBandIndex != 12) ? (8 * std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).subblockGain[getCurrentWindowIndexForFrequencyLineIndex(scaleFactorBandIndex, frequencyLineIndex)]) : 0;
     }
 
     template <class TScaleFactorBandTable>
     unsigned int Frame::getScaleFactorBandIndexForFrequencyLineIndex(TScaleFactorBandTable const &scaleFactorBands, unsigned int const frequencyLineIndex) const {
+        // TODO: assert sur frequencyLineIndex < 576 : ATTENTION POUR LES SHORT BLOCKS c'est < 192
         // Browse all scale factor bands
         for (unsigned int scaleFactorBandIndex = 0; scaleFactorBandIndex < scaleFactorBands.size(); ++scaleFactorBandIndex) {
             // If frequency line index is in current scale factor band
@@ -454,7 +436,7 @@ break;
         }
 
         // Not found
-        return -1;
+        return -1;//TODO: exception normalement
     }
 
     unsigned int Frame::getCurrentWindowIndexForFrequencyLineIndex(unsigned int const scaleFactorBandIndex, unsigned int const frequencyLineIndex) const {
@@ -464,7 +446,7 @@ break;
         int const currentScaleFactorBandMaxFrequencyLine = Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][scaleFactorBandIndex];
         int const currentScaleFactorBandLastMaxFrequencyLine = (scaleFactorBandIndex > 0) ? Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][scaleFactorBandIndex - 1] : -1;
 
-        return ((frequencyLineIndex / 3) - (currentScaleFactorBandLastMaxFrequencyLine + 1)) / (currentScaleFactorBandMaxFrequencyLine - currentScaleFactorBandLastMaxFrequencyLine);
+        return (frequencyLineIndex - ((currentScaleFactorBandLastMaxFrequencyLine + 1) * 3)) / (currentScaleFactorBandMaxFrequencyLine - currentScaleFactorBandLastMaxFrequencyLine);
     }
 
     unsigned int Frame::getScaleFactorForFrequencyLineIndex(unsigned int const granuleIndex, unsigned int const channelIndex, SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const {
@@ -477,13 +459,13 @@ break;
             auto const scaleFactorBandIndex = getScaleFactorBandIndexForFrequencyLineIndex(Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()], frequencyLineIndex / 3);
 
             // Get scale factor
-            return (scaleFactorBandIndex != -1) ? currentScaleFactors.shortWindow[scaleFactorBandIndex][getCurrentWindowIndexForFrequencyLineIndex(scaleFactorBandIndex, frequencyLineIndex)] : 0;//TODO: a voir pour -1
+            return (scaleFactorBandIndex != 12) ? currentScaleFactors.shortWindow[scaleFactorBandIndex][getCurrentWindowIndexForFrequencyLineIndex(scaleFactorBandIndex, frequencyLineIndex)] : 0;//TODO: a voir pour -1
         }
 
         // Long block
         // Get scale factor
         auto const scaleFactorBandIndex = getScaleFactorBandIndexForFrequencyLineIndex(Data::frequencyLinesPerScaleFactorBandLongBlock[_header.getSamplingRateIndex()], frequencyLineIndex);
-        return (scaleFactorBandIndex != -1) ? (currentScaleFactors.longWindow[scaleFactorBandIndex] + (sideInformationGranule.preflag * Data::pretabByScaleFactorBand[scaleFactorBandIndex])) : 0; // TODO: a voir pour -1
+        return (scaleFactorBandIndex != 21) ? (currentScaleFactors.longWindow[scaleFactorBandIndex] + (sideInformationGranule.preflag * Data::pretabByScaleFactorBand[scaleFactorBandIndex])) : 0; // TODO: a voir pour -1
     }
 
     bool Frame::isFrequencyLineIndexInShortBlock(SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const {
@@ -502,11 +484,11 @@ break;
 
         // Process
         for (unsigned int frequencyLineIndex = 0; frequencyLineIndex < intensityStereoBound; ++frequencyLineIndex) {
-            auto const leftValue = (currentFrequencyLineValuesLeft[frequencyLineIndex] + currentFrequencyLineValuesRight[frequencyLineIndex]) / std::sqrt(2.0f);
-            auto const rightValue = (currentFrequencyLineValuesLeft[frequencyLineIndex] - currentFrequencyLineValuesRight[frequencyLineIndex]) / std::sqrt(2.0f);
+            auto const midValue = currentFrequencyLineValuesLeft[frequencyLineIndex];
+            auto const sideValue = currentFrequencyLineValuesRight[frequencyLineIndex];
 
-            currentFrequencyLineValuesLeft[frequencyLineIndex] = leftValue;
-            currentFrequencyLineValuesRight[frequencyLineIndex] = rightValue;
+            currentFrequencyLineValuesLeft[frequencyLineIndex] = (midValue + sideValue) / std::sqrt(2.0f);
+            currentFrequencyLineValuesRight[frequencyLineIndex] = (midValue - sideValue) / std::sqrt(2.0f);
         }
     }
 
@@ -641,14 +623,20 @@ break;
         }
     }
 
-    void Frame::applyOverlapping(std::array<float, 36> const &subbandValues, std::array<float, 576> &currentSubbandsValues, unsigned int const subbandIndex) {
+    void Frame::applyOverlapping(unsigned int const channelIndex, std::array<float, 36> const &currentSubbandValues, std::array<float, 576> &subbandsValues, unsigned int const subbandIndex) const {
+static std::array<std::array<float, 576>, 2> oldValues = {};//TODO: c'est ainsi, réécrire correctement sans static
+
         // Process overlapping
-        for (unsigned int i = 0; i < ((subbandIndex < 31) ? 36 : 18); ++i) {//TODO: a voir si correct ainsi
-            currentSubbandsValues[(subbandIndex * 18) + i] += subbandValues[i];
+        for (unsigned int i = 0; i < 18; ++i) {
+            // Overlap current first values with previous block last values
+            subbandsValues[(subbandIndex * 18) + i] = currentSubbandValues[i] + oldValues[channelIndex][(subbandIndex * 18) + i];
+
+            // Save current last values
+            oldValues[channelIndex][(subbandIndex * 18) + i] = currentSubbandValues[18 + i];
         }
     }
 
-    void Frame::applyCompensationForFrequencyInversion(std::array<float, 576> &currentSubbandsValues, unsigned int const subbandIndex) {
+    void Frame::applyCompensationForFrequencyInversion(std::array<float, 576> &subbandsValues, unsigned int const subbandIndex) const {
         // Only process odd indexes
         if ((subbandIndex % 2) == 0) {
             return;
@@ -657,20 +645,16 @@ break;
         // Process frequency inversion
         // Only on odd indexes
         for (unsigned int i = 1; i < 18; i += 2) {
-            currentSubbandsValues[(subbandIndex * 18) + i] *= -1.0f;
+            subbandsValues[(subbandIndex * 18) + i] *= -1.0f;
         }
     }
 
-    void Frame::applyPolyphaseFilterBank(unsigned int const granuleIndex, unsigned int const channelIndex) {
-        // Get current subbands values vector
-        auto &currentSubbandsValues = _subbandsValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
-
+    void Frame::applyPolyphaseFilterBank(unsigned int const granuleIndex, unsigned int const channelIndex, std::array<float, 576> &subbandsValues) {
         // Get current pcm values vector
         auto &currentPcmValues = _pcmValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
 
         // Create shifted and matrixed subbands values array
-        //std::array<float, 1024> shiftedAndMatrixedSubbandsValues = {};  // TODO: voir si doit etre reutilisé quand il est construit pour l'autre granule du meme canal !!!
-        auto &shiftedAndMatrixedSubbandsValues = _shiftedAndMatrixedSubbandsValues[channelIndex];//TODO: voir si ainsi ou juste comme au dessus
+        auto &shiftedAndMatrixedSubbandsValues = _shiftedAndMatrixedSubbandsValues[channelIndex];//TODO: C'est ainsi, le réécrire correctement sans static!
 
         // Time loop
         for (unsigned int t = 0; t < 18; ++t) {
@@ -684,7 +668,7 @@ break;
                 shiftedAndMatrixedSubbandsValues[i] = 0.0f;
 
                 for (unsigned int k = 0; k < 32; ++k) {
-                    shiftedAndMatrixedSubbandsValues[i] += Data::matrixingCoefficients[i][k] * currentSubbandsValues[(18 * k) + t];
+                    shiftedAndMatrixedSubbandsValues[i] += Data::matrixingCoefficients[i][k] * subbandsValues[(18 * k) + t];
                 }
             }
 

@@ -6,8 +6,8 @@
 
 namespace MP3::Frame::Data {//TODO: voir si Table a la fin !!!
 
-    using FrequencyLinesPerScaleFactorBandShortBlock = std::array<unsigned int, 12>;
-    using FrequencyLinesPerScaleFactorBandLongBlock = std::array<unsigned int, 21>;
+    using FrequencyLinesPerScaleFactorBandShortBlock = std::array<unsigned int, 13>;
+    using FrequencyLinesPerScaleFactorBandLongBlock = std::array<unsigned int, 22>;
 
     constexpr FrequencyLinesPerScaleFactorBandLongBlock frequencyLinesPerScaleFactorBandLongBlock32000 = {
         3,
@@ -30,7 +30,8 @@ namespace MP3::Frame::Data {//TODO: voir si Table a la fin !!!
         295,
         363,
         447,
-        549
+        549,
+        575
     };
 
     constexpr FrequencyLinesPerScaleFactorBandLongBlock frequencyLinesPerScaleFactorBandLongBlock44100 = {
@@ -54,7 +55,8 @@ namespace MP3::Frame::Data {//TODO: voir si Table a la fin !!!
         237,
         287,
         341,
-        417
+        417,
+        575
     };
 
     constexpr FrequencyLinesPerScaleFactorBandLongBlock frequencyLinesPerScaleFactorBandLongBlock48000 = {
@@ -78,7 +80,8 @@ namespace MP3::Frame::Data {//TODO: voir si Table a la fin !!!
         229,
         275,
         329,
-        383
+        383,
+        575
     };
 
     constexpr std::array<FrequencyLinesPerScaleFactorBandLongBlock, 3> frequencyLinesPerScaleFactorBandLongBlock = {
@@ -99,7 +102,8 @@ namespace MP3::Frame::Data {//TODO: voir si Table a la fin !!!
         77,
         103,
         137,
-        179
+        179,
+        191
     };
 
     constexpr FrequencyLinesPerScaleFactorBandShortBlock frequencyLinesPerScaleFactorBandShortBlock44100 = {
@@ -114,7 +118,8 @@ namespace MP3::Frame::Data {//TODO: voir si Table a la fin !!!
         65,
         83,
         105,
-        135
+        135,
+        191
     };
 
     constexpr FrequencyLinesPerScaleFactorBandShortBlock frequencyLinesPerScaleFactorBandShortBlock48000 = {
@@ -129,7 +134,8 @@ namespace MP3::Frame::Data {//TODO: voir si Table a la fin !!!
         63,
         79,
         99,
-        125
+        125,
+        191
     };
 
     constexpr std::array<FrequencyLinesPerScaleFactorBandShortBlock, 3> frequencyLinesPerScaleFactorBandShortBlock = {

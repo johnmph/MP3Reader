@@ -58,9 +58,9 @@ namespace MP3::Frame {
         void applyAliasReduction(unsigned int const granuleIndex, unsigned int const channelIndex);
         void applyIMDCT(SideInformationGranule const &sideInformationGranule, std::array<float, 576> const &frequencyLineValues, std::array<float, 36> &subbandValues, unsigned int const subbandIndex) const;
         void applyWindowing(SideInformationGranule const &sideInformationGranule, std::array<float, 36> &subbandValues, unsigned int const subbandIndex) const;
-        void applyOverlapping(std::array<float, 36> const &subbandValues, std::array<float, 576> &currentSubbandsValues, unsigned int const subbandIndex);
-        void applyCompensationForFrequencyInversion(std::array<float, 576> &currentSubbandsValues, unsigned int const subbandIndex);
-        void applyPolyphaseFilterBank(unsigned int const granuleIndex, unsigned int const channelIndex);
+        void applyOverlapping(unsigned int const channelIndex, std::array<float, 36> const &currentSubbandValues, std::array<float, 576> &subbandsValues, unsigned int const subbandIndex) const;
+        void applyCompensationForFrequencyInversion(std::array<float, 576> &subbandsValues, unsigned int const subbandIndex) const;
+        void applyPolyphaseFilterBank(unsigned int const granuleIndex, unsigned int const channelIndex, std::array<float, 576> &subbandsValues);
 
 
         Header const _header;
@@ -68,9 +68,8 @@ namespace MP3::Frame {
         std::vector<uint8_t> const _data;
         unsigned int _dataBitIndex;
         std::vector<ScaleFactors> _scaleFactors;
-        std::vector<std::array<float, 576>> _frequencyLineValues; // TODO: int ou float ? -> normalement float
-        std::vector<std::array<float, 576>> _subbandsValues;
-        std::vector<std::array<float, 576>> _pcmValues;//TODO: voir si diviser par granules aussi !!!
+        std::vector<std::array<float, 576>> _frequencyLineValues;
+        std::vector<std::array<float, 576>> _pcmValues;//TODO: ne pas diviser par granules !
         std::vector<unsigned int> _startingRzeroFrequencyLineIndexes;   //TODO: par apres voir si regrouper avec les 2 du dessus dans une structure et avoir un std::vector<Structure>
 
         static std::vector<std::array<float, 1024>> _shiftedAndMatrixedSubbandsValues;
