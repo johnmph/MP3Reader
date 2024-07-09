@@ -7,10 +7,48 @@
 
 namespace MP3 {
 
-    /*Decoder::Decoder() {
-    }*/
+    Decoder::Decoder() : _framesBlocksSubbandsOverlappingValues({}), _framesShiftedAndMatrixedSubbandsValues({}) {//TODO: voir pour empty initializers, si pas bon, mettre std fill dans le constructor
+    }
 
     bool Decoder::isValidFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat) const {
+        bool isValid = false;
+
+
+        unsigned int oldPosition = 0;
+        unsigned int frameCount = 0;
+
+        browseFramesHeader(inputStream, [&inputStream, &isValid, &oldPosition, &frameCount, &numberOfFramesForValidFormat](Frame::Header const &frameHeader) {
+            // Get current position in stream
+            unsigned int const currentPosition = inputStream.tellg();
+
+            // Restart if next frame not just after current frame
+            if (static_cast<unsigned int>(currentPosition) > (oldPosition + Frame::Header::headerSize)) {
+                // Reset frame count (-1 to have 0 after incrementation)
+                frameCount = -1;
+            }
+
+            // Increment frame count
+            ++frameCount;
+
+            // If we have enough frames for valid format
+            if (frameCount >= numberOfFramesForValidFormat) {
+                isValid = true;
+
+                // Exit
+                return false;
+            }
+
+            // Update old position
+            oldPosition = currentPosition + (frameHeader.getFrameLength() - Frame::Header::headerSize);
+
+            // Continue
+            return true;
+        });
+
+        return isValid;
+    }
+/*
+    bool Decoder::isValidFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat) const {//TODO: plutot avoir un browseFrames avec une lambda/methode/function/functor qui renvoie un bool si on continue d'iterer ou pas. Avoir une methode isCBR isVBR qui regarde si toutes les frames ont le meme bitrate ou pas (et pareil pour le sampling rate ?)
         // Reset stream
         inputStream.clear();
         inputStream.seekg(0);
@@ -48,9 +86,23 @@ namespace MP3 {
 
         // Return isValid
         return isValid;
-    }
+    }*/
 
-    unsigned int Decoder::getNumberOfFrames(std::istream &inputStream) const {//TODO: factoriser ce code avec celui du dessus
+    unsigned int Decoder::getNumberOfFrames(std::istream &inputStream) const {
+        unsigned int frameCount = 0;
+
+        browseFramesHeader(inputStream, [&inputStream, &frameCount](Frame::Header const &frameHeader) {
+            // Increment frameCount
+            ++frameCount;
+
+            // Continue
+            return true;
+        });
+
+        return frameCount;
+    }
+/*
+    unsigned int Decoder::getNumberOfFrames(st::istream &inputStream) const {
         // Reset stream
         inputStream.clear();
         inputStream.seekg(0);
@@ -92,7 +144,7 @@ namespace MP3 {
 
         // Return frameCount
         return frameCount;
-    }
+    }*/
 
     Frame::Frame Decoder::getFrameAtIndex(std::istream &inputStream, unsigned int const frameIndex) {
         // Get frame header at frameIndex
@@ -107,10 +159,6 @@ namespace MP3 {
         Frame::SideInformation const frameSideInformation(frameHeader, getSideInformationData(inputStream, frameHeader));
 
         // Get frame data
-    int p = frameSideInformation.getMainDataBegin();//TODO: a retirer et les comms en bas
-    if (/*p > 591*/frameIndex == 11) {
-        int r = 1;
-    }
         std::vector<uint8_t> frameData((frameSideInformation.getMainDataSizeInBits() / 8) + (((frameSideInformation.getMainDataSizeInBits() % 8) != 0) ? 1 : 0));
         unsigned int bitReservoirCurrentFrameIndex = frameIndex + ((frameSideInformation.getMainDataBegin() == 0) ? 1 : 0);
 
@@ -125,16 +173,11 @@ namespace MP3 {
             auto bitReservoirCurrentFrameHeader = getFrameHeaderAtIndex(inputStream, bitReservoirCurrentFrameIndex);
 
             // Check if we have enough data
-        int ee = bitReservoirCurrentFrameHeader.getDataSize();
-        int ff = bitReservoirCurrentFrameHeader.getFrameLength();
             if (bitReservoirCurrentFrameHeader.getDataSize() >= beginOffset) {
                 // Read all data
                 for (unsigned int bytesRead = 0; bytesRead < frameData.size();) {
                     // Set position of stream to data of bitReservoir current frame
-                int r = inputStream.tellg();
                     inputStream.seekg(bitReservoirCurrentFrameHeader.getCRCSize() + bitReservoirCurrentFrameHeader.getSideInformationSize() + (((bitReservoirCurrentFrameIndex < frameIndex) && (bytesRead == 0)) ? (bitReservoirCurrentFrameHeader.getDataSize() - beginOffset) : 0), std::ios_base::cur);
-                int x = bitReservoirCurrentFrameHeader.getCRCSize() + bitReservoirCurrentFrameHeader.getSideInformationSize() + (((bitReservoirCurrentFrameIndex < frameIndex) && (bytesRead == 0)) ? (bitReservoirCurrentFrameHeader.getDataSize() - beginOffset) : 0);
-                int r2 = inputStream.tellg();
 
                     // Calculate available bytes
                     unsigned int const limitToRead = ((bitReservoirCurrentFrameIndex < frameIndex) && (bytesRead == 0)) ? beginOffset : bitReservoirCurrentFrameHeader.getDataSize();
@@ -160,7 +203,7 @@ namespace MP3 {
         unsigned int const frameAncillaryDataSizeInBits = 0; //TODO: changer, attention dans le cas ou toutes les données d'une frame sont dans la frame précédente
 
         // Create frame
-        return Frame::Frame(frameHeader, frameSideInformation, frameAncillaryDataSizeInBits, frameData);
+        return Frame::Frame(frameHeader, frameSideInformation, frameAncillaryDataSizeInBits, frameData, _framesBlocksSubbandsOverlappingValues, _framesShiftedAndMatrixedSubbandsValues);
     }
 
     bool Decoder::synchronizeToNextFrame(std::istream &inputStream, std::array<uint8_t, Frame::Header::headerSize> &headerData, uint8_t const versionMask, uint8_t const versionValue) const {

@@ -20,11 +20,22 @@ namespace MP3::Frame {
 
         // TODO: avoir une methode pour soit renvoyer les PCM samples (getPCMSamples), soit une methode browsePCMSamples a qui on passe une fonction
         // TODO: avoir un getter pour savoir combien de bits a vraiment besoin cette frame, pour savoir ce que on laisse au bit reservoir
-        Frame(Header const &header, SideInformation const &sideInformation, unsigned int ancillaryDataSizeInBits, std::vector<uint8_t> const &data);//TODO: voir si rvalue, ET SURTOUT PASSER data avec la gestion du bit reservoir
+        Frame(Header const &header, SideInformation const &sideInformation, unsigned int ancillaryDataSizeInBits, std::vector<uint8_t> const &data, std::array<std::array<float, 576>, 2> &blocksSubbandsOverlappingValues, std::array<std::array<float, 1024>, 2> &shiftedAndMatrixedSubbandsValues);//TODO: voir si rvalue, ET SURTOUT PASSER data avec la gestion du bit reservoir
+
+        unsigned int getNumberOfChannels() const;
+        unsigned int getBitrate() const;
+        unsigned int getSamplingRate() const;
+        ChannelMode getChannelMode() const;
+        bool isCRCProtected() const;
+        bool isIntensityStereo() const;
+        bool isMSStereo() const;
+        bool isCopyrighted() const;
+        bool isOriginal() const;
 
         //unsigned int get //TODO: retourner dataBitsIndex ? pour vérifier la taille ? 
         std::vector<uint8_t> const &getAncillaryBits() const;//TODO: a voir aussi pour la taille si la get aussi
-        std::array<float, 576> const &getPCMSamples(unsigned int const granuleIndex, unsigned int const channelIndex) const;
+        std::array<float, 1152> const &getPCMSamples(unsigned int const channelIndex) const;
+
 
     private:
         void extractMainData();
@@ -67,12 +78,12 @@ namespace MP3::Frame {
         SideInformation const _sideInformation;
         std::vector<uint8_t> const _data;
         unsigned int _dataBitIndex;
-        std::vector<ScaleFactors> _scaleFactors;
-        std::vector<std::array<float, 576>> _frequencyLineValues;
-        std::vector<std::array<float, 576>> _pcmValues;//TODO: ne pas diviser par granules !
-        std::vector<unsigned int> _startingRzeroFrequencyLineIndexes;   //TODO: par apres voir si regrouper avec les 2 du dessus dans une structure et avoir un std::vector<Structure>
-
-        static std::vector<std::array<float, 1024>> _shiftedAndMatrixedSubbandsValues;
+        std::array<std::vector<ScaleFactors>, 2> _scaleFactors;
+        std::array<std::vector<std::array<float, 576>>, 2> _frequencyLineValues;
+        std::vector<std::array<float, 1152>> _pcmValues;
+        std::array<std::vector<unsigned int>, 2> _startingRzeroFrequencyLineIndexes;
+        std::array<std::array<float, 576>, 2> &_blocksSubbandsOverlappingValues;
+        std::array<std::array<float, 1024>, 2> &_shiftedAndMatrixedSubbandsValues;
     };
 
 }

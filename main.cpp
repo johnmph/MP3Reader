@@ -12,7 +12,7 @@
 
 struct PortAudio {//TODO:renommer
     PortAudio(MP3::Decoder &decoder, std::istream &inputStream) : _result(Pa_Initialize()), _stream(nullptr), _decoder(decoder), _inputStream(inputStream), _currentFrameIndex(0), _currentPositionInFrame(0), _isPlaying(false) {
-        _currentFramePCMValues.resize(4/*2*/);//TODO: selon le nombre de canaux !
+        _currentFramePCMValues.resize(2);//TODO: selon le nombre de canaux !
 
         _numberOfFrames = _decoder.getNumberOfFrames(_inputStream);
 
@@ -41,7 +41,7 @@ struct PortAudio {//TODO:renommer
             std::cout << "Output device name : " << pInfo->name << "\n";
         }
 
-        outputParameters.channelCount = 2/*1*/;       /* stereo output */
+        outputParameters.channelCount = 2;       /* stereo output */
         outputParameters.sampleFormat = paFloat32; /* 32 bit float output */
         outputParameters.suggestedLatency = Pa_GetDeviceInfo(outputParameters.device)->defaultLowOutputLatency;
         outputParameters.hostApiSpecificStreamInfo = nullptr;
@@ -121,19 +121,26 @@ private:
 
                 // Get current frame
                 auto frame = _decoder.getFrameAtIndex(_inputStream, _currentFrameIndex);
-                for (unsigned int i = 0; i < 4/*2*/; ++i) {
-                    _currentFramePCMValues[i] = frame.getPCMSamples(i / 2, i % 2/*i, 0*/);
+
+                // Get number of channels
+                _currentFrameNumberOfChannels = frame.getNumberOfChannels();
+
+                // Copy PCM samples
+                for (unsigned int i = 0; i < _currentFrameNumberOfChannels; ++i) {
+                    _currentFramePCMValues[i] = frame.getPCMSamples(i);
                 }
 
                 // Go to next frame
                 ++_currentFrameIndex;
             }
 
-            unsigned int granuleIndex = (_currentPositionInFrame > 575) ? 1 : 0;
-            *out++ = _currentFramePCMValues[(granuleIndex * 2) + 0/*granuleIndex*/][_currentPositionInFrame - (576 * granuleIndex)];
-            /*//*/*out++ = _currentFramePCMValues[(granuleIndex * 2) + 1][_currentPositionInFrame - (576 * granuleIndex)];
+            // Copy value to audio buffer
+            *out++ = _currentFramePCMValues[0][_currentPositionInFrame];
+            *out++ = _currentFramePCMValues[_currentFrameNumberOfChannels - 1][_currentPositionInFrame];
 
+            // Check position in frame
             ++_currentPositionInFrame;
+
             if (_currentPositionInFrame > 1151) {
                 _currentPositionInFrame = 0;
             }
@@ -171,45 +178,13 @@ private:
     unsigned int _currentFrameIndex;
     unsigned int _numberOfFrames;
     unsigned int _currentPositionInFrame;
-    std::vector<std::array<float, 576>> _currentFramePCMValues;
+    unsigned int _currentFrameNumberOfChannels;
+    std::vector<std::array<float, 1152>> _currentFramePCMValues;
     bool _isPlaying;
 };
 
-int main(void) {/*
-    std::ifstream ifs("01.wav", std::ios::binary);
-
-    ifs.clear();
-    ifs.seekg(0x28);
-
-    uint32_t dataSize = 0;
-    ifs.read(reinterpret_cast<char *>(&dataSize), sizeof(dataSize));
-
-    std::vector<uint16_t> data(dataSize / 2);
-    ifs.read(reinterpret_cast<char *>(data.data()), dataSize);
-
-    PortAudio portAudio(std::move(data));
-
-    if (portAudio.open(Pa_GetDefaultOutputDevice())) {
-        if (portAudio.start()) {
-
-            for (; portAudio.isPlaying();) {
-                Pa_Sleep(1000);
-            }
-
-            portAudio.stop();
-        }
-
-        portAudio.close();
-    }
-
-    printf("Test finished.\n");
-    return paNoError;
-
-error:
-    fprintf( stderr, "An error occurred while using the portaudio stream\n" );
-    return 1;*/
-
-    std::ifstream mp3Stream("JointStereoMS.mp3", std::ios::binary);
+int main(void) {
+    std::ifstream mp3Stream("Mono_cbr2.mp3", std::ios::binary);
 
     MP3::Decoder mp3Decoder;
 

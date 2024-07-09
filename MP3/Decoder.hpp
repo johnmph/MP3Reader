@@ -14,7 +14,10 @@ namespace MP3 {
     struct Decoder {
 
         // TODO: avoir un constructor avec plusieurs parametres (ou une struct Configuration) et avoir par exemple le nombre de frames a lire pour etre certain que c'est un bon fichier MP3
-        //Decoder();
+        Decoder();
+
+        template <class TFunction>
+        void browseFramesHeader(std::istream &inputStream, TFunction &&browseFunc) const;
 
         bool isValidFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat) const;
         unsigned int getNumberOfFrames(std::istream &inputStream) const;
@@ -40,7 +43,11 @@ namespace MP3 {
 
         std::vector<FrameEntry> _frameEntries;
         //BitReservoir _bitReservoir;//TODO: voir si besoin
+        std::array<std::array<float, 576>, 2> _framesBlocksSubbandsOverlappingValues;
+        std::array<std::array<float, 1024>, 2> _framesShiftedAndMatrixedSubbandsValues;
     };
+
+    #include "Decoder_s.hpp"
 
 }
 

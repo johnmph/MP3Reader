@@ -2,36 +2,69 @@
 #include <cmath>
 #include "Frame.hpp"
 #include "../Helper.hpp"
+#include "Data/Header.hpp"
 #include "Data/Frame.hpp"
 #include "Data/HuffmanTables.hpp"
 #include "Data/ScaleFactorBands.hpp"
 #include "Data/SynthesisFilterBank.hpp"
 #include "Data/SynthesisWindow.hpp"
-static bool _isInitialized = false;
+
 //TODO: bien verifier pour les conditions et le code executé pour les types de block, si mixed ou pas, ...
 namespace MP3::Frame {
-std::vector<std::array<float, 1024>> Frame::_shiftedAndMatrixedSubbandsValues;
-    Frame::Frame(Header const &header, SideInformation const &sideInformation, unsigned int const ancillaryDataSizeInBits, std::vector<uint8_t> const &data) : _header(header), _sideInformation(sideInformation), _data(data), _dataBitIndex(0) {
-        // Resize scaleFactors vector (always 2 granules but variable number of channels)
-        _scaleFactors.resize(2 * _header.getNumberOfChannels());
 
-        // Resize frequencyLineValues vector (always 2 granules but variable number of channels)
-        _frequencyLineValues.resize(2 * _header.getNumberOfChannels());
+    Frame::Frame(Header const &header, SideInformation const &sideInformation, unsigned int const ancillaryDataSizeInBits, std::vector<uint8_t> const &data, std::array<std::array<float, 576>, 2> &blocksSubbandsOverlappingValues, std::array<std::array<float, 1024>, 2> &shiftedAndMatrixedSubbandsValues) : _header(header), _sideInformation(sideInformation), _data(data), _dataBitIndex(0), _blocksSubbandsOverlappingValues(blocksSubbandsOverlappingValues), _shiftedAndMatrixedSubbandsValues(shiftedAndMatrixedSubbandsValues) {
+        for (unsigned int index = 0; index < 2; ++index) {
+            // Resize scaleFactors vector (variable number of channels)
+            _scaleFactors[index].resize(_header.getNumberOfChannels());
 
-        // Resize pcmValues vector (always 2 granules but variable number of channels)
-        _pcmValues.resize(2 * _header.getNumberOfChannels());
+            // Resize frequencyLineValues vector (variable number of channels)
+            _frequencyLineValues[index].resize(_header.getNumberOfChannels());
 
-        // Resize startingRzeroFrequencyLineIndexes vector (always 2 granules but variable number of channels)
-        _startingRzeroFrequencyLineIndexes.resize(2 * _header.getNumberOfChannels());
-if (_isInitialized == false) {
-_shiftedAndMatrixedSubbandsValues.resize(_header.getNumberOfChannels());
-for (unsigned int i = 0; i < _header.getNumberOfChannels(); ++i) {
-            std::fill(std::begin(_shiftedAndMatrixedSubbandsValues[i]), std::end(_shiftedAndMatrixedSubbandsValues[i]), 0.0f);//TODO: doit etre initialisé a 0, voir si pas deja via le resize dans le constructor
-}
-_isInitialized = true;
-}
+            // Resize startingRzeroFrequencyLineIndexes vector (variable number of channels)
+            _startingRzeroFrequencyLineIndexes[index].resize(2 * _header.getNumberOfChannels());
+        }
+
+        // Resize pcmValues vector (Keep 2 granules by array but variable number of channels)
+        _pcmValues.resize(_header.getNumberOfChannels());
+
         // Extract main data
         extractMainData();
+    }
+
+    unsigned int Frame::getNumberOfChannels() const {
+        return _header.getNumberOfChannels();
+    }
+
+    unsigned int Frame::getBitrate() const {
+        return _header.getBitrate();
+    }
+
+    unsigned int Frame::getSamplingRate() const {
+        return Data::samplingRates[_header.getSamplingRateIndex()];
+    }
+
+    ChannelMode Frame::getChannelMode() const {
+        return _header.getChannelMode();
+    }
+
+    bool Frame::isCRCProtected() const {
+        return _header.isCRCProtected();
+    }
+
+    bool Frame::isIntensityStereo() const {
+        return _header.isIntensityStereo();
+    }
+
+    bool Frame::isMSStereo() const {
+        return _header.isMSStereo();
+    }
+
+    bool Frame::isCopyrighted() const {
+        return _header.isCopyrighted();
+    }
+
+    bool Frame::isOriginal() const {
+        return _header.isOriginal();
     }
 
     std::vector<uint8_t> const &Frame::getAncillaryBits() const {
@@ -39,8 +72,8 @@ _isInitialized = true;
         return {};
     }
 
-    std::array<float, 576> const &Frame::getPCMSamples(unsigned int const granuleIndex, unsigned int const channelIndex) const {
-        return _pcmValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+    std::array<float, 1152> const &Frame::getPCMSamples(unsigned int const channelIndex) const {
+        return _pcmValues[channelIndex];
     }
 
     void Frame::extractMainData() {
@@ -85,7 +118,7 @@ _isInitialized = true;
         auto const &currentGranule = _sideInformation.getGranule(granuleIndex, channelIndex);
 
         // Get current scaleFactors vector
-        auto &currentScaleFactors = _scaleFactors[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+        auto &currentScaleFactors = _scaleFactors[granuleIndex][channelIndex];
 
         // If we have 3 short windows
         if (currentGranule.blockType == BlockType::ShortWindows3) {
@@ -120,7 +153,7 @@ _isInitialized = true;
                     currentScaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, (scaleFactorBandIndex < 11) ? currentGranule.sLen1 : currentGranule.sLen2);
                 } else {
                     // Share with first granule
-                    currentScaleFactors.longWindow[scaleFactorBandIndex] = _scaleFactors[channelIndex].longWindow[scaleFactorBandIndex];
+                    currentScaleFactors.longWindow[scaleFactorBandIndex] = _scaleFactors[0][channelIndex].longWindow[scaleFactorBandIndex];
                 }
             }
         }
@@ -131,10 +164,10 @@ _isInitialized = true;
         auto const &currentGranule = _sideInformation.getGranule(granuleIndex, channelIndex);
 
         // Get current frequency line values vector
-        auto &currentFrequencyLineValues = _frequencyLineValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+        auto &currentFrequencyLineValues = _frequencyLineValues[granuleIndex][channelIndex];
 
         // Get current starting Rzero frequency line index
-        auto &currentStartingRzeroFrequencyLineIndex = _startingRzeroFrequencyLineIndexes[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+        auto &currentStartingRzeroFrequencyLineIndex = _startingRzeroFrequencyLineIndexes[granuleIndex][channelIndex];
 
         // Browse all frequency lines
         unsigned int frequencyLineIndex = 0;
@@ -213,7 +246,7 @@ _isInitialized = true;
         auto const &currentGranule = _sideInformation.getGranule(granuleIndex, channelIndex);
 
         // Get current frequency line values vector
-        auto &currentFrequencyLineValues = _frequencyLineValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+        auto &currentFrequencyLineValues = _frequencyLineValues[granuleIndex][channelIndex];
 
         // Browse frequency lines
         for (unsigned int frequencyLineIndex = 0; frequencyLineIndex < 576; ++frequencyLineIndex) {//TODO: toutes les references a 576 doivent etre retirées et remplacées par un const
@@ -248,7 +281,7 @@ _isInitialized = true;
         }
 
         // Get current frequency line values vector
-        auto &currentFrequencyLineValues = _frequencyLineValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+        auto &currentFrequencyLineValues = _frequencyLineValues[granuleIndex][channelIndex];
         auto savedCurrentFrequencyLineValues = currentFrequencyLineValues;
         
         // Browse frequency lines
@@ -306,7 +339,7 @@ _isInitialized = true;
         auto const &currentGranule = _sideInformation.getGranule(granuleIndex, channelIndex);
 
         // Get current frequency line values vector
-        auto const &currentFrequencyLineValues = _frequencyLineValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+        auto const &currentFrequencyLineValues = _frequencyLineValues[granuleIndex][channelIndex];
 
         // Get current subbands values vector
         std::array<float, 576> subbandsValues = {};
@@ -451,7 +484,7 @@ _isInitialized = true;
 
     unsigned int Frame::getScaleFactorForFrequencyLineIndex(unsigned int const granuleIndex, unsigned int const channelIndex, SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const {
         // Get current scaleFactors vector
-        auto &currentScaleFactors = _scaleFactors[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+        auto &currentScaleFactors = _scaleFactors[granuleIndex][channelIndex];
 
         // Short block
         if (isFrequencyLineIndexInShortBlock(sideInformationGranule, frequencyLineIndex)) {
@@ -479,8 +512,8 @@ _isInitialized = true;
         auto const intensityStereoBound = (_header.isIntensityStereo() == true) ? getIntensityStereoBound(granuleIndex) : 576;
 
         // Get current frequency line values vector
-        auto &currentFrequencyLineValuesLeft = _frequencyLineValues[(granuleIndex * _header.getNumberOfChannels()) + 0];
-        auto &currentFrequencyLineValuesRight = _frequencyLineValues[(granuleIndex * _header.getNumberOfChannels()) + 1];
+        auto &currentFrequencyLineValuesLeft = _frequencyLineValues[granuleIndex][0];
+        auto &currentFrequencyLineValuesRight = _frequencyLineValues[granuleIndex][1];
 
         // Process
         for (unsigned int frequencyLineIndex = 0; frequencyLineIndex < intensityStereoBound; ++frequencyLineIndex) {
@@ -497,8 +530,8 @@ _isInitialized = true;
         auto const &currentGranuleRight = _sideInformation.getGranule(granuleIndex, 1);
 
         // Get current frequency line values vector
-        auto &currentFrequencyLineValuesLeft = _frequencyLineValues[(granuleIndex * _header.getNumberOfChannels()) + 0];
-        auto &currentFrequencyLineValuesRight = _frequencyLineValues[(granuleIndex * _header.getNumberOfChannels()) + 1];
+        auto &currentFrequencyLineValuesLeft = _frequencyLineValues[granuleIndex][0];
+        auto &currentFrequencyLineValuesRight = _frequencyLineValues[granuleIndex][1];
 
         // Process
         for (unsigned int frequencyLineIndex = getIntensityStereoBound(granuleIndex); frequencyLineIndex < 576; ++frequencyLineIndex) {
@@ -527,7 +560,7 @@ _isInitialized = true;
         auto const &currentGranuleRight = _sideInformation.getGranule(granuleIndex, 1);
 
         // Get current starting Rzero frequency line index (right channel)
-        auto const currentStartingRzeroFrequencyLineIndex = _startingRzeroFrequencyLineIndexes[(granuleIndex * _header.getNumberOfChannels()) + 1] - 1;
+        auto const currentStartingRzeroFrequencyLineIndex = _startingRzeroFrequencyLineIndexes[granuleIndex][1] - 1;
 
         // Short block
         if (isFrequencyLineIndexInShortBlock(currentGranuleRight, currentStartingRzeroFrequencyLineIndex) == true) {//TODO: a voir
@@ -556,7 +589,7 @@ _isInitialized = true;
         }
 
         // Get current frequency line values vector
-        auto &currentFrequencyLineValues = _frequencyLineValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+        auto &currentFrequencyLineValues = _frequencyLineValues[granuleIndex][channelIndex];
 
         // Browse subbands of 18 frequency lines
         unsigned int const subBandEndBound = (((currentGranule.blockType == BlockType::ShortWindows3) && (std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).mixedBlockFlag == true)) ? 2 : 32);//TODO: a voir avec le todo du dessus
@@ -624,15 +657,16 @@ _isInitialized = true;
     }
 
     void Frame::applyOverlapping(unsigned int const channelIndex, std::array<float, 36> const &currentSubbandValues, std::array<float, 576> &subbandsValues, unsigned int const subbandIndex) const {
-static std::array<std::array<float, 576>, 2> oldValues = {};//TODO: c'est ainsi, réécrire correctement sans static
+        // Get blocks subbands overlapping values array for channel index
+        auto &blocksSubbandsOverlappingValues = _blocksSubbandsOverlappingValues[channelIndex];
 
         // Process overlapping
         for (unsigned int i = 0; i < 18; ++i) {
             // Overlap current first values with previous block last values
-            subbandsValues[(subbandIndex * 18) + i] = currentSubbandValues[i] + oldValues[channelIndex][(subbandIndex * 18) + i];
+            subbandsValues[(subbandIndex * 18) + i] = currentSubbandValues[i] + blocksSubbandsOverlappingValues[(subbandIndex * 18) + i];
 
             // Save current last values
-            oldValues[channelIndex][(subbandIndex * 18) + i] = currentSubbandValues[18 + i];
+            blocksSubbandsOverlappingValues[(subbandIndex * 18) + i] = currentSubbandValues[18 + i];
         }
     }
 
@@ -651,10 +685,10 @@ static std::array<std::array<float, 576>, 2> oldValues = {};//TODO: c'est ainsi,
 
     void Frame::applyPolyphaseFilterBank(unsigned int const granuleIndex, unsigned int const channelIndex, std::array<float, 576> &subbandsValues) {
         // Get current pcm values vector
-        auto &currentPcmValues = _pcmValues[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
+        auto &currentPcmValues = _pcmValues[channelIndex];
 
-        // Create shifted and matrixed subbands values array
-        auto &shiftedAndMatrixedSubbandsValues = _shiftedAndMatrixedSubbandsValues[channelIndex];//TODO: C'est ainsi, le réécrire correctement sans static!
+        // Get shifted and matrixed subbands values array for channel index
+        auto &shiftedAndMatrixedSubbandsValues = _shiftedAndMatrixedSubbandsValues[channelIndex];
 
         // Time loop
         for (unsigned int t = 0; t < 18; ++t) {
@@ -691,10 +725,10 @@ static std::array<std::array<float, 576>, 2> oldValues = {};//TODO: c'est ainsi,
 
             // Calculate samples
             for (unsigned int j = 0; j < 32; ++j) {
-                currentPcmValues[(32 * t) + j] = 0.0f;
+                currentPcmValues[(granuleIndex * 576) + (32 * t) + j] = 0.0f;
 
                 for (unsigned int i = 0; i < 16; ++i) {
-                    currentPcmValues[(32 * t) + j] += windowValues[(32 * i) + j];
+                    currentPcmValues[(granuleIndex * 576) + (32 * t) + j] += windowValues[(32 * i) + j];
                 }
             }
         }
