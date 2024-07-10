@@ -7,17 +7,30 @@
 #include "MP3/Decoder.hpp"
 
 
-#define SAMPLE_RATE   (44100)
-
-
 struct PortAudio {//TODO:renommer
     PortAudio(MP3::Decoder &decoder, std::istream &inputStream) : _result(Pa_Initialize()), _stream(nullptr), _decoder(decoder), _inputStream(inputStream), _currentFrameIndex(0), _currentPositionInFrame(0), _isPlaying(false) {
         _currentFramePCMValues.resize(2);//TODO: selon le nombre de canaux !
 
         _numberOfFrames = _decoder.getNumberOfFrames(_inputStream);
 
+        auto const bitrates = _decoder.getBitrates(_inputStream);
+        auto const samplingRates = _decoder.getSamplingRates(_inputStream);
+
         std::cout << "Is valid MP3 = " << (_decoder.isValidFormat(_inputStream, 3) ? "YES" : "NO") << "\n";
         std::cout << "Number of frames = " << _numberOfFrames << "\n";
+        std::cout << "Is VBR : " << ((bitrates.size() > 1) ? "YES" : "NO") << "\n";
+        std::cout << "Has multiple sampling rates : " << ((samplingRates.size() > 1) ? "YES" : "NO") << "\n";
+
+        if (bitrates.size() == 1) {
+            std::cout << "Bitrate = " << *(std::begin(bitrates)) << "\n";//TODO: trouver tous les .begin / .end et remplacer par std::begin, std::end
+        }
+
+        if (samplingRates.size() == 1) {
+            std::cout << "Sampling rate = " << *(std::begin(samplingRates)) << "\n";
+            _samplingRate = *(std::begin(samplingRates));
+        } else {
+            _samplingRate = 44100;
+        }
     }
 
     ~PortAudio() {
@@ -46,7 +59,7 @@ struct PortAudio {//TODO:renommer
         outputParameters.suggestedLatency = Pa_GetDeviceInfo(outputParameters.device)->defaultLowOutputLatency;
         outputParameters.hostApiSpecificStreamInfo = nullptr;
 
-        PaError err = Pa_OpenStream(&_stream, nullptr, &outputParameters, SAMPLE_RATE, paFramesPerBufferUnspecified, paClipOff, &PortAudio::streamRequestCallback, this);
+        PaError err = Pa_OpenStream(&_stream, nullptr, &outputParameters, _samplingRate, paFramesPerBufferUnspecified, paClipOff, &PortAudio::streamRequestCallback, this);
         if (err != paNoError) {
             /* Failed to open stream to device !!! */
             return false;
@@ -181,6 +194,7 @@ private:
     unsigned int _currentFrameNumberOfChannels;
     std::vector<std::array<float, 1152>> _currentFramePCMValues;
     bool _isPlaying;
+    unsigned int _samplingRate;
 };
 
 int main(void) {

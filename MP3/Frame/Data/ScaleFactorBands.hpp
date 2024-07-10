@@ -4,7 +4,7 @@
 #include <array>
 
 
-namespace MP3::Frame::Data {//TODO: voir si Table a la fin !!!
+namespace MP3::Frame::Data {//TODO: voir pour les dernieres valeurs pour couvrir toutes les frequency lines si on laisse ainsi ou si on change le code qui utilise ces tables !!!
 
     using FrequencyLinesPerScaleFactorBandShortBlock = std::array<unsigned int, 13>;
     using FrequencyLinesPerScaleFactorBandLongBlock = std::array<unsigned int, 22>;

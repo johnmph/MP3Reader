@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "Decoder.hpp"
 #include "Helper.hpp"
+#include "Frame/Data/Header.hpp"
 
 
 namespace MP3 {
@@ -47,46 +48,6 @@ namespace MP3 {
 
         return isValid;
     }
-/*
-    bool Decoder::isValidFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat) const {//TODO: plutot avoir un browseFrames avec une lambda/methode/function/functor qui renvoie un bool si on continue d'iterer ou pas. Avoir une methode isCBR isVBR qui regarde si toutes les frames ont le meme bitrate ou pas (et pareil pour le sampling rate ?)
-        // Reset stream
-        inputStream.clear();
-        inputStream.seekg(0);
-
-        // Try to find at least numberOfFramesForValidFormat frames
-        std::array<uint8_t, Frame::Header::headerSize> headerData;
-        bool isValid = true;
-
-        for (unsigned int frameIndex = 0; frameIndex < numberOfFramesForValidFormat; ++frameIndex) {
-            // Get current position in stream
-            unsigned int const currentPosition = inputStream.tellg();
-
-            // Exit if we can't synchronize to next frame
-            if (synchronizeToNextFrame(inputStream, headerData, 0xFE, 0xFA) == false) {
-                // Format is not valid
-                isValid = false;
-                break;
-            }
-
-            // Restart if next frame not just after current frame
-            if (static_cast<unsigned int>(inputStream.tellg()) > (currentPosition + headerData.size())) {
-                frameIndex = 0;
-            }
-
-            // Create header
-            Frame::Header header(headerData, 0xFE, 0xFA);
-
-            // Pass frame size bytes in stream (minus header size)
-            inputStream.seekg(header.getFrameLength() - headerData.size(), std::ios_base::cur);
-        }
-
-        // Reset stream
-        inputStream.clear();
-        inputStream.seekg(0);   //TODO: a voir
-
-        // Return isValid
-        return isValid;
-    }*/
 
     unsigned int Decoder::getNumberOfFrames(std::istream &inputStream) const {
         unsigned int frameCount = 0;
@@ -101,50 +62,34 @@ namespace MP3 {
 
         return frameCount;
     }
-/*
-    unsigned int Decoder::getNumberOfFrames(st::istream &inputStream) const {
-        // Reset stream
-        inputStream.clear();
-        inputStream.seekg(0);
 
-        // Try to find at least numberOfFramesForValidFormat frames
-        std::array<uint8_t, Frame::Header::headerSize> headerData;
+    std::unordered_set<unsigned int> Decoder::getBitrates(std::istream &inputStream) const {
+        std::unordered_set<unsigned int> bitrates;
 
-        // While inputStream is good
-        unsigned int frameCount = 0;
+        browseFramesHeader(inputStream, [&inputStream, &bitrates](Frame::Header const &frameHeader) {
+            // Add current bitrate
+            bitrates.insert(frameHeader.getBitrate());
 
-        while (inputStream) {
-            // Get current position in stream
-            unsigned int const currentPosition = inputStream.tellg();
+            // Continue
+            return true;
+        });
 
-            // Exit if we can't synchronize to next frame
-            if (synchronizeToNextFrame(inputStream, headerData, 0xFE, 0xFA) == false) {
-                // Can't find another frame
-                break;
-            }
+        return bitrates;
+    }
 
-            // Restart if next frame not just after current frame
-            if (static_cast<unsigned int>(inputStream.tellg()) > (currentPosition + headerData.size())) {
-                frameCount = 0;
-            }
+    std::unordered_set<unsigned int> Decoder::getSamplingRates(std::istream &inputStream) const {
+        std::unordered_set<unsigned int> samplingRates;
 
-            // Create header
-            Frame::Header header(headerData, 0xFE, 0xFA);
+        browseFramesHeader(inputStream, [&inputStream, &samplingRates](Frame::Header const &frameHeader) {
+            // Add current sampling rate
+            samplingRates.insert(Frame::Data::samplingRates[frameHeader.getSamplingRateIndex()]);
 
-            // Pass frame size bytes in stream (minus header size)
-            inputStream.seekg(header.getFrameLength() - headerData.size(), std::ios_base::cur);
+            // Continue
+            return true;
+        });
 
-            // Increment frameCount
-            ++frameCount;
-        }
-
-        // Reset stream
-        inputStream.clear();
-        inputStream.seekg(0);   //TODO: a voir
-
-        // Return frameCount
-        return frameCount;
-    }*/
+        return samplingRates;
+    }
 
     Frame::Frame Decoder::getFrameAtIndex(std::istream &inputStream, unsigned int const frameIndex) {
         // Get frame header at frameIndex

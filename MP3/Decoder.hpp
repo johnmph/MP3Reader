@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <istream>
 #include <vector>
+#include <unordered_set>
 #include "Frame/Header.hpp"
 #include "Frame/Frame.hpp"
 
@@ -21,6 +22,9 @@ namespace MP3 {
 
         bool isValidFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat) const;
         unsigned int getNumberOfFrames(std::istream &inputStream) const;
+        std::unordered_set<unsigned int> getBitrates(std::istream &inputStream) const;
+        std::unordered_set<unsigned int> getSamplingRates(std::istream &inputStream) const;
+
         Frame::Frame getFrameAtIndex(std::istream &inputStream, unsigned int const frameIndex);
         
     private:
