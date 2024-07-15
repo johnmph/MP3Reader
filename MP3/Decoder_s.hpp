@@ -1,7 +1,7 @@
 #ifndef MP3_DECODER_S_HPP
 #define MP3_DECODER_S_HPP
 
-
+/*
 template <class TFunction>
 void Decoder::browseFramesHeader(std::istream &inputStream, TFunction &&browseFunc) const {
     // Reset stream
@@ -13,14 +13,14 @@ void Decoder::browseFramesHeader(std::istream &inputStream, TFunction &&browseFu
 
     // While inputStream is good
     while (inputStream) {
-        // Exit if we can't synchronize to next frame
-        if (synchronizeToNextFrame(inputStream, headerData, 0xFE, 0xFA) == false) {
+        // Exit if we can't read next frame header data
+        if (tryToReadNextFrameHeaderData(inputStream, headerData) == false) {
             // Can't find another frame
             break;
         }
         
         // Create header
-        Frame::Header header(headerData, 0xFE, 0xFA);
+        Frame::Header header(headerData, _versionMask, _versionValue);
 
         // Call browseFund and exit if returns false
         if (browseFunc(header) == false) {
@@ -30,6 +30,38 @@ void Decoder::browseFramesHeader(std::istream &inputStream, TFunction &&browseFu
         // Pass frame size bytes in stream (minus header size)
         inputStream.seekg(header.getFrameLength() - headerData.size(), std::ios_base::cur);
     }
+}*/
+
+template <class TFunction>
+void Decoder::browseFramesHeader(std::istream &inputStream, TFunction &&browseFunc) {
+    unsigned int frameIndex = 0;
+
+    // Create array for header
+    std::array<uint8_t, Frame::Header::headerSize> headerData;
+
+    // Frames loop
+    for (;;) {
+        // Move to frame at frameIndex
+        if (moveToFrameAtIndex(inputStream, frameIndex) == false) {
+            // Can't find another frame
+            break;
+        }
+
+        // Read header data (no need to check result, it must be always ok since we call moveToFrameAtIndex which verify it before)
+        tryToReadNextFrameHeaderData(inputStream, headerData);
+
+        // Create frame header
+        Frame::Header header(headerData, _versionMask, _versionValue);
+
+        // Call browseFund and exit if returns false
+        if (browseFunc(header) == false) {
+            break;
+        }
+
+        // Increment frameIndex
+        ++frameIndex;
+    }
 }
+
 
 #endif /* MP3_DECODER_S_HPP */

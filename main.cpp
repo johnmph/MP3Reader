@@ -2,6 +2,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
+#include <optional>
 #include <portaudio.h>
 
 #include "MP3/Decoder.hpp"
@@ -9,8 +10,6 @@
 
 struct PortAudio {//TODO:renommer
     PortAudio(MP3::Decoder &decoder, std::istream &inputStream) : _result(Pa_Initialize()), _stream(nullptr), _decoder(decoder), _inputStream(inputStream), _currentFrameIndex(0), _currentPositionInFrame(0), _isPlaying(false) {
-        _currentFramePCMValues.resize(2);//TODO: selon le nombre de canaux !
-
         _numberOfFrames = _decoder.getNumberOfFrames(_inputStream);
 
         auto const bitrates = _decoder.getBitrates(_inputStream);
@@ -133,23 +132,18 @@ private:
                 }
 
                 // Get current frame
-                auto frame = _decoder.getFrameAtIndex(_inputStream, _currentFrameIndex);
+                _currentFrame.emplace(_decoder.getFrameAtIndex(_inputStream, _currentFrameIndex));
 
                 // Get number of channels
-                _currentFrameNumberOfChannels = frame.getNumberOfChannels();
-
-                // Copy PCM samples
-                for (unsigned int i = 0; i < _currentFrameNumberOfChannels; ++i) {
-                    _currentFramePCMValues[i] = frame.getPCMSamples(i);
-                }
+                _currentFrameNumberOfChannels = (*_currentFrame).getNumberOfChannels();
 
                 // Go to next frame
                 ++_currentFrameIndex;
             }
 
             // Copy value to audio buffer
-            *out++ = _currentFramePCMValues[0][_currentPositionInFrame];
-            *out++ = _currentFramePCMValues[_currentFrameNumberOfChannels - 1][_currentPositionInFrame];
+            *out++ = (*_currentFrame).getPCMSamples(0)[_currentPositionInFrame];
+            *out++ = (*_currentFrame).getPCMSamples(_currentFrameNumberOfChannels - 1)[_currentPositionInFrame];
 
             // Check position in frame
             ++_currentPositionInFrame;
@@ -186,13 +180,13 @@ private:
 
     PaError _result;
     PaStream *_stream;
-    MP3::Decoder _decoder;
+    MP3::Decoder _decoder;//TODO: par copie ???
     std::istream &_inputStream;
+    std::optional<MP3::Frame::Frame> _currentFrame;
     unsigned int _currentFrameIndex;
     unsigned int _numberOfFrames;
     unsigned int _currentPositionInFrame;
     unsigned int _currentFrameNumberOfChannels;
-    std::vector<std::array<float, 1152>> _currentFramePCMValues;
     bool _isPlaying;
     unsigned int _samplingRate;
 };
@@ -200,7 +194,7 @@ private:
 int main(void) {
     std::ifstream mp3Stream("Mono_cbr2.mp3", std::ios::binary);
 
-    MP3::Decoder mp3Decoder;
+    MP3::Decoder mp3Decoder(0xFE, 0xFA);
 
     PortAudio portAudio(mp3Decoder, mp3Stream);
 

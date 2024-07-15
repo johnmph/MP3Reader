@@ -24,14 +24,11 @@ namespace MP3::Helper {
     }
     
     std::vector<uint8_t> getDataFromStream(std::istream &inputStream, unsigned int sizeInBits) {//TODO: si sizeInBits n'est pas multiple de 8 ???
-        std::vector<uint8_t> data;
-
         // Get size in bytes
         auto sizeInBytes = (sizeInBits / 8) + (((sizeInBits % 8) != 0) ? 1 : 0);
 
-        // Reserve size
-        data.reserve(sizeInBytes);//TODO: a voir car ne modifie pas la taille du vector
-        data.resize(sizeInBytes);
+        // Create data
+        std::vector<uint8_t> data(sizeInBytes);
 
         // TODO: verifier taille flux
 

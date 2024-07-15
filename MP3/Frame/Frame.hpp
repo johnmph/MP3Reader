@@ -20,7 +20,7 @@ namespace MP3::Frame {
 
         // TODO: avoir une methode pour soit renvoyer les PCM samples (getPCMSamples), soit une methode browsePCMSamples a qui on passe une fonction
         // TODO: avoir un getter pour savoir combien de bits a vraiment besoin cette frame, pour savoir ce que on laisse au bit reservoir
-        Frame(Header const &header, SideInformation const &sideInformation, unsigned int ancillaryDataSizeInBits, std::vector<uint8_t> const &data, std::array<std::array<float, 576>, 2> &blocksSubbandsOverlappingValues, std::array<std::array<float, 1024>, 2> &shiftedAndMatrixedSubbandsValues);//TODO: voir si rvalue, ET SURTOUT PASSER data avec la gestion du bit reservoir
+        Frame(Header const &header, SideInformation const &sideInformation, unsigned int ancillaryDataSizeInBits, std::vector<uint8_t> const &data, std::array<std::array<float, 576>, 2> &blocksSubbandsOverlappingValues, std::array<std::array<float, 1024>, 2> &shiftedAndMatrixedSubbandsValues);
 
         unsigned int getNumberOfChannels() const;
         unsigned int getBitrate() const;

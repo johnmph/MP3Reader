@@ -610,7 +610,7 @@ namespace MP3::Frame {
 
     void Frame::applyIMDCT(SideInformationGranule const &sideInformationGranule, std::array<float, 576> const &frequencyLineValues, std::array<float, 36> &subbandValues, unsigned int const subbandIndex) const {
         unsigned int const n = ((sideInformationGranule.blockType == BlockType::ShortWindows3) && ((std::get<SideInformationGranuleSpecialWindow>(sideInformationGranule.window).mixedBlockFlag == false) || (subbandIndex >= 2))) ? 12 : 36;
-        unsigned int const halfN = n / 2;   // TODO: renommer mieux les indexs et variables ici
+        unsigned int const halfN = n / 2;
 
         // Produce 36 values
         for (unsigned int i = 0; i < 36; ++i) { // TODO: toutes les constantes comme 36, 12, ... doivent etre dans des constantes

@@ -56,7 +56,7 @@ namespace MP3::Frame {
         unsigned int dataBitIndex = 0;
 
         // Get mainDataBegin
-        _mainDataBegin = Helper::getBitsAtIndex(data, dataBitIndex, 9);//TODO: verifier si c'est ok niveau endian et data sens, verifier si positif ou negatif
+        _mainDataBegin = Helper::getBitsAtIndex(data, dataBitIndex, 9);
 
         // Get privateBits
         _privateBits = Helper::getBitsAtIndex(data, dataBitIndex, (nbrChannels == 1) ? 5 : 3);
@@ -111,7 +111,7 @@ namespace MP3::Frame {
             // Get tableSelect
             for (int i = 0; i < 2; ++i) {
                 sideInformationGranule.tableSelect.push_back(Helper::getBitsAtIndex(data, dataBitIndex, 5));
-                //TODO: thrower une exception si if ((huffmanTableIndex == 4) || (huffmanTableIndex == 14)) { ?
+                //TODO: thrower une exception si if ((huffmanTableIndex == 4) || (huffmanTableIndex == 14)) { ? : pas thrower car c le fichier qui est mal formé mais plutot un code erreur ou autre
             }
 
             // Get subblockGain
@@ -132,7 +132,7 @@ namespace MP3::Frame {
             // Get tableSelect
             for (int i = 0; i < 3; ++i) {
                 sideInformationGranule.tableSelect.push_back(Helper::getBitsAtIndex(data, dataBitIndex, 5));
-                //TODO: thrower une exception si if ((huffmanTableIndex == 4) || (huffmanTableIndex == 14)) { ?
+                //TODO: thrower une exception si if ((huffmanTableIndex == 4) || (huffmanTableIndex == 14)) { ? : pas thrower car c le fichier qui est mal formé mais plutot un code erreur ou autre
             }
 
             // Get region0Count
