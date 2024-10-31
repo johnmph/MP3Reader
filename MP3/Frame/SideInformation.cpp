@@ -56,15 +56,15 @@ namespace MP3::Frame {
         unsigned int dataBitIndex = 0;
 
         // Get mainDataBegin
-        _mainDataBegin = Helper::getBitsAtIndex(data, dataBitIndex, 9);
+        _mainDataBegin = Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 9);
 
         // Get privateBits
-        _privateBits = Helper::getBitsAtIndex(data, dataBitIndex, (nbrChannels == 1) ? 5 : 3);
+        _privateBits = Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, (nbrChannels == 1) ? 5 : 3);
 
         // Get scaleFactor
         for (unsigned int channelIndex = 0; channelIndex < nbrChannels; ++channelIndex) {
             for (unsigned int scaleFactorShareIndex = 0; scaleFactorShareIndex < 4; ++scaleFactorShareIndex) {
-                _scaleFactorShare[(channelIndex * 4) + scaleFactorShareIndex] = Helper::getBitsAtIndex(data, dataBitIndex, 1) != 0;
+                _scaleFactorShare[(channelIndex * 4) + scaleFactorShareIndex] = Helper::getBitsAtIndex<bool>(data, dataBitIndex, 1);
             }
         }
 
@@ -80,22 +80,22 @@ namespace MP3::Frame {
         SideInformationGranule sideInformationGranule;
 
         // Get par23Length
-        sideInformationGranule.par23Length = Helper::getBitsAtIndex(data, dataBitIndex, 12);
+        sideInformationGranule.par23Length = Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 12);
         
         // Get bigValues
-        sideInformationGranule.bigValues = Helper::getBitsAtIndex(data, dataBitIndex, 9);
+        sideInformationGranule.bigValues = Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 9);
 
         // Get globalGain
-        sideInformationGranule.globalGain = Helper::getBitsAtIndex(data, dataBitIndex, 8);
+        sideInformationGranule.globalGain = Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 8);
 
         // Get scaleFacCompress
-        auto const scaleFactorCompressIndex = Helper::getBitsAtIndex(data, dataBitIndex, 4);
+        auto const scaleFactorCompressIndex = Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 4);
 
         sideInformationGranule.sLen1 = Data::scaleFactorCompress[scaleFactorCompressIndex][0];
         sideInformationGranule.sLen2 = Data::scaleFactorCompress[scaleFactorCompressIndex][1];
 
         // Get windowSwitchingFlag
-        sideInformationGranule.windowSwitchingFlag = Helper::getBitsAtIndex(data, dataBitIndex, 1) != 0;
+        sideInformationGranule.windowSwitchingFlag = Helper::getBitsAtIndex<bool>(data, dataBitIndex, 1);
 
         // Check windowSwitchingFlag
         if (sideInformationGranule.windowSwitchingFlag == true) {
@@ -103,20 +103,20 @@ namespace MP3::Frame {
             sideInformationGranule.window = SideInformationGranuleSpecialWindow {};
 
             // Get blockType
-            sideInformationGranule.blockType = static_cast<BlockType>(Helper::getBitsAtIndex(data, dataBitIndex, 2));
+            sideInformationGranule.blockType = static_cast<BlockType>(Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 2));
 
             // Get mixedBlockFlag
-            std::get<SideInformationGranuleSpecialWindow>(sideInformationGranule.window).mixedBlockFlag = Helper::getBitsAtIndex(data, dataBitIndex, 1) != 0;
+            std::get<SideInformationGranuleSpecialWindow>(sideInformationGranule.window).mixedBlockFlag = Helper::getBitsAtIndex<bool>(data, dataBitIndex, 1);
 
             // Get tableSelect
             for (int i = 0; i < 2; ++i) {
-                sideInformationGranule.tableSelect.push_back(Helper::getBitsAtIndex(data, dataBitIndex, 5));
+                sideInformationGranule.tableSelect.push_back(Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 5));
                 //TODO: thrower une exception si if ((huffmanTableIndex == 4) || (huffmanTableIndex == 14)) { ? : pas thrower car c le fichier qui est mal formé mais plutot un code erreur ou autre
             }
 
             // Get subblockGain
             for (int i = 0; i < 3; ++i) {
-                std::get<SideInformationGranuleSpecialWindow>(sideInformationGranule.window).subblockGain[i] = Helper::getBitsAtIndex(data, dataBitIndex, 3);
+                std::get<SideInformationGranuleSpecialWindow>(sideInformationGranule.window).subblockGain[i] = Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 3);
             }
 
             // region0Count and region1Count are set to fixed values if short block
@@ -131,25 +131,25 @@ namespace MP3::Frame {
 
             // Get tableSelect
             for (int i = 0; i < 3; ++i) {
-                sideInformationGranule.tableSelect.push_back(Helper::getBitsAtIndex(data, dataBitIndex, 5));
+                sideInformationGranule.tableSelect.push_back(Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 5));
                 //TODO: thrower une exception si if ((huffmanTableIndex == 4) || (huffmanTableIndex == 14)) { ? : pas thrower car c le fichier qui est mal formé mais plutot un code erreur ou autre
             }
 
             // Get region0Count
-            sideInformationGranule.region0Count = Helper::getBitsAtIndex(data, dataBitIndex, 4);
+            sideInformationGranule.region0Count = Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 4);
 
             // Get region1Count
-            sideInformationGranule.region1Count = Helper::getBitsAtIndex(data, dataBitIndex, 3);
+            sideInformationGranule.region1Count = Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 3);
         }
 
         // Get preflag
-        sideInformationGranule.preflag = Helper::getBitsAtIndex(data, dataBitIndex, 1);
+        sideInformationGranule.preflag = Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 1);
 
         // Get scaleFacScale
-        sideInformationGranule.scaleFacScale = Data::scaleFactorScale[Helper::getBitsAtIndex(data, dataBitIndex, 1)];
+        sideInformationGranule.scaleFacScale = Data::scaleFactorScale[Helper::getBitsAtIndex<unsigned int>(data, dataBitIndex, 1)];
 
         // Get count1TableIsB
-        sideInformationGranule.isCount1TableB = Helper::getBitsAtIndex(data, dataBitIndex, 1) != 0;
+        sideInformationGranule.isCount1TableB = Helper::getBitsAtIndex<bool>(data, dataBitIndex, 1);
 
         return sideInformationGranule;
     }

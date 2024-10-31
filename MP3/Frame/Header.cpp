@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include "Header.hpp"
 #include "Data/Header.hpp"
+#include "../Helper.hpp"
 
 
 namespace MP3::Frame {
@@ -105,37 +106,45 @@ namespace MP3::Frame {
     }
 
     void Header::decodeHeaderBytes(std::array<uint8_t, headerSize> const &headerBytes) {
-        //TODO: voir si pas plutot utiliser getBitAtIndex et rendre getBitAtIndex plus générique avec le parametre data en template parameter
+        unsigned int dataBitIndex = 15;//TODO: pour tester on a mis 14 et 16 et on est dans une boucle infinie ? a verifier car si fichier mal formé on peut bloquer ?
+
         // Set isCRCProtected
-        _isCRCProtected = (headerBytes[1] & 0x1) == 0x0;
+        _isCRCProtected = Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 1) == 0x0;
 
         // Set bitrate
-        _bitrate = Data::bitrates[headerBytes[2] >> 4];
+        _bitrate = Data::bitrates[Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 4)];
 
         // Set sampling rate index
-        _samplingRateIndex = (headerBytes[2] >> 2) & 0x3;
+        _samplingRateIndex = Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 2);
 
         // Set padding bit
-        _isPadded = (headerBytes[2] & 0x2) == 0x2;
+        _isPadded = Helper::getBitsAtIndex<bool>(headerBytes, dataBitIndex, 1);
 
         // Set private bit
-        _privateBit = headerBytes[2] & 0x1;
+        _privateBit = Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 1);
 
         // Set channel mode
-        _channelMode = static_cast<ChannelMode>(headerBytes[3] >> 6);
+        _channelMode = static_cast<ChannelMode>(Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 2));
 
         // Set MS Stereo and Intensity Stereo
-        _isMSStereo = (headerBytes[3] & 0x20) == 0x20;
-        _isIntensityStereo = (headerBytes[3] & 0x10) == 0x10;
+        _isMSStereo = Helper::getBitsAtIndex<bool>(headerBytes, dataBitIndex, 1);
+        _isIntensityStereo = Helper::getBitsAtIndex<bool>(headerBytes, dataBitIndex, 1);
 
         // Set copyright
-        _isCopyrighted = (headerBytes[3] & 0x8) == 0x8;
+        _isCopyrighted = Helper::getBitsAtIndex<bool>(headerBytes, dataBitIndex, 1);
 
         // Set original
-        _isOriginal = (headerBytes[3] & 0x4) == 0x4;
+        _isOriginal = Helper::getBitsAtIndex<bool>(headerBytes, dataBitIndex, 1);
 
         // Set emphasis
-        _emphasis = static_cast<Emphasis>(headerBytes[3] & 0x3);
+        _emphasis = static_cast<Emphasis>(Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 2));
+/*
+        // Check if bitrate is ok
+        if ((_bitrate == 0) || (_bitrate == -1)) {
+            //throw ;
+        }
+*/
+
     }
 
 }

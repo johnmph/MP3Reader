@@ -97,9 +97,11 @@ namespace MP3 {
         // Get frame header at frameIndex
         auto const frameHeader = getFrameHeaderAtIndex(inputStream, frameIndex);
 
-        // TODO: si CRC, le lire
+        // Check CRC if needed
         if (frameHeader.isCRCProtected() == true) {
-            inputStream.seekg(frameHeader.getCRCSize(), std::ios_base::cur);//TODO: checker le CRC dans une methode a part
+            if (isCRCCorrect(inputStream, frameHeader) == false) {
+                //throw ;
+            }
         }
         
         // Create side informations
@@ -155,6 +157,11 @@ namespace MP3 {
 
         // Create frame
         return Frame::Frame(frameHeader, frameSideInformation, frameAncillaryDataSizeInBits, frameData, _framesBlocksSubbandsOverlappingValues, _framesShiftedAndMatrixedSubbandsValues);
+    }
+
+    bool Decoder::isCRCCorrect(std::istream &inputStream, Frame::Header const &frameHeader) {//TODO: voir si passer le frame header
+        inputStream.seekg(frameHeader.getCRCSize(), std::ios_base::cur);//TODO: checker le CRC dans une methode a part
+        return true;
     }
 
     bool Decoder::tryToReadNextFrameHeaderData(std::istream &inputStream, std::array<uint8_t, Frame::Header::headerSize> &headerData) const {

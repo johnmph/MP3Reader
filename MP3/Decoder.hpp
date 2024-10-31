@@ -42,6 +42,7 @@ namespace MP3 {
             unsigned int positionInBytes;
         };*/
 
+        bool isCRCCorrect(std::istream &inputStream, Frame::Header const &frameHeader);
         bool tryToReadNextFrameHeaderData(std::istream &inputStream, std::array<uint8_t, Frame::Header::headerSize> &headerData) const;
         Frame::Header getFrameHeaderAtIndex(std::istream &inputStream, unsigned int const frameIndex);
         bool moveToFrameAtIndex(std::istream &inputStream, unsigned int const index);

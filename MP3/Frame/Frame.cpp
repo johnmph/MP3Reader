@@ -126,14 +126,14 @@ namespace MP3::Frame {
             if (std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).mixedBlockFlag == true) {
                 // Browse scaleFactor bands 0 to 7 for long window
                 for (unsigned int scaleFactorBandIndex = 0; scaleFactorBandIndex < 8; ++scaleFactorBandIndex) {
-                    currentScaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, currentGranule.sLen1);
+                    currentScaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, currentGranule.sLen1);
                 }
 
                 // Browse scaleFactor bands 3 to 11 for short window
                 for (unsigned int scaleFactorBandIndex = 3; scaleFactorBandIndex < 12; ++scaleFactorBandIndex) {
                     // Browse windows
                     for (unsigned int windowIndex = 0; windowIndex < 3; ++windowIndex) {
-                        currentScaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
+                        currentScaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
                     }
                 }
             } else {
@@ -141,7 +141,7 @@ namespace MP3::Frame {
                 for (unsigned int scaleFactorBandIndex = 0; scaleFactorBandIndex < 12; ++scaleFactorBandIndex) {
                     // Browse windows
                     for (unsigned int windowIndex = 0; windowIndex < 3; ++windowIndex) {
-                        currentScaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
+                        currentScaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
                     }
                 }
             }
@@ -150,7 +150,7 @@ namespace MP3::Frame {
             for (unsigned int scaleFactorBandIndex = 0; scaleFactorBandIndex < 21; ++scaleFactorBandIndex) {
                 // If we don't share or if we are in first granule
                 if ((_sideInformation.getScaleFactorShare(channelIndex, getScaleFactorShareGroupForScaleFactorBand(scaleFactorBandIndex)) == false) || (granuleIndex == 0)) {
-                    currentScaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex(_data, _dataBitIndex, (scaleFactorBandIndex < 11) ? currentGranule.sLen1 : currentGranule.sLen2);
+                    currentScaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, (scaleFactorBandIndex < 11) ? currentGranule.sLen1 : currentGranule.sLen2);
                 } else {
                     // Share with first granule
                     currentScaleFactors.longWindow[scaleFactorBandIndex] = _scaleFactors[0][channelIndex].longWindow[scaleFactorBandIndex];
@@ -212,10 +212,10 @@ namespace MP3::Frame {
             // Simply get 4 bits and invert them if table is B
             else {
                 // Get data
-                decodedValue.v = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
-                decodedValue.w = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
-                decodedValue.x = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
-                decodedValue.y = Helper::getBitsAtIndex(_data, _dataBitIndex, 1) ^ 0x1;
+                decodedValue.v = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1) ^ 0x1;
+                decodedValue.w = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1) ^ 0x1;
+                decodedValue.x = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1) ^ 0x1;
+                decodedValue.y = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1) ^ 0x1;
             }
 
             // Correct data
@@ -409,7 +409,7 @@ namespace MP3::Frame {
         // Browse huffman code
         for (unsigned int code = 1; (_dataBitIndex - granuleStartDataBitIndex) < granulePart23LengthInBits;) {
             code <<= 1;
-            code |= Helper::getBitsAtIndex(_data, _dataBitIndex, 1);
+            code |= Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1);
 
             auto const &pair = huffmanTable.find(code);
             if (pair != std::end(huffmanTable)) {
@@ -424,7 +424,7 @@ namespace MP3::Frame {
         //TODO: thrower si on depasse la taille de la granule
         // Add linbits if necessary
         if ((value == 15) && (linbits > 0)) {
-            value += Helper::getBitsAtIndex(_data, _dataBitIndex, linbits);
+            value += Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, linbits);
         }
 
         // Correct sign
@@ -437,7 +437,7 @@ namespace MP3::Frame {
         //TODO: thrower si on depasse la taille de la granule
         // Correct sign if necessary
         if (value != 0) {
-            value *= (Helper::getBitsAtIndex(_data, _dataBitIndex, 1) == 0) ? 1 : -1;
+            value *= (Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1) == 0) ? 1 : -1;
         }
 
         return value;
