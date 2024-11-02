@@ -17,6 +17,9 @@ namespace MP3::Helper {
     template <typename TContainer, class TFunction>
     constexpr TContainer transformContainer(TContainer const &input, TFunction &&function);
 
+    template <typename TValue, TValue Polynomial, TValue InitialValue>
+    TValue calculateCRC(std::vector<uint8_t> const &data);
+
     #include "Helper_s.hpp"
 
 }

@@ -5,6 +5,7 @@
 #include <istream>
 #include <vector>
 #include <unordered_set>
+#include <optional>
 #include "Frame/Header.hpp"
 #include "Frame/Frame.hpp"
 
@@ -42,10 +43,11 @@ namespace MP3 {
             unsigned int positionInBytes;
         };*/
 
-        bool isCRCCorrect(std::istream &inputStream, Frame::Header const &frameHeader);
-        bool tryToReadNextFrameHeaderData(std::istream &inputStream, std::array<uint8_t, Frame::Header::headerSize> &headerData) const;
-        Frame::Header getFrameHeaderAtIndex(std::istream &inputStream, unsigned int const frameIndex);
-        bool moveToFrameAtIndex(std::istream &inputStream, unsigned int const index);
+        std::vector<uint8_t> getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation);
+        uint16_t getCRCStored(std::istream &inputStream, Frame::Header const &frameHeader);
+        uint16_t getCRCCalculated(std::istream &inputStream, Frame::Header const &frameHeader);
+        std::optional<Frame::Header> tryToGetFrameHeaderAtIndex(std::istream &inputStream, unsigned int const frameIndex);
+        std::optional<std::array<uint8_t, Frame::Header::headerSize>> tryToReadNextFrameHeaderData(std::istream &inputStream) const;
         Frame::SideInformation getFrameSideInformation(std::istream &inputStream, Frame::Header const &frameHeader) const;
 
         uint8_t const _versionMask;
@@ -54,6 +56,29 @@ namespace MP3 {
         //BitReservoir _bitReservoir;//TODO: voir si besoin
         std::array<std::array<float, 576>, 2> _framesBlocksSubbandsOverlappingValues;
         std::array<std::array<float, 1024>, 2> _framesShiftedAndMatrixedSubbandsValues;
+    };
+
+    struct Exception : std::exception {
+        Exception(Decoder &decoder) :_decoder(decoder) {}
+
+    private:
+        Decoder &_decoder;
+    };
+
+    struct FrameNotFound : Exception {
+        FrameNotFound(Decoder &decoder, unsigned int const index) : Exception(decoder), _index(index) {}
+
+    private:
+        unsigned int const _index;
+    };
+
+    struct FrameCRCIncorrect : Exception {
+        FrameCRCIncorrect(Decoder &decoder, uint16_t crcStored, uint16_t crcCalculated) : Exception(decoder), _crcStored(crcStored), _crcCalculated(crcCalculated) {}
+
+    private:
+        //Frame::Header &_header;
+        uint16_t const _crcStored;
+        uint16_t const _crcCalculated;
     };
 
     #include "Decoder_s.hpp"

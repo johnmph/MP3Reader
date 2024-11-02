@@ -32,5 +32,32 @@ constexpr TContainer transformContainer(TContainer const &input, TFunction &&fun
     return output;
 }
 
+template <typename TValue, TValue Polynomial, TValue InitialValue>
+TValue calculateCRC(std::vector<uint8_t> const &data) {
+    TValue crc = InitialValue;
+   
+    // Browse data
+    for (std::size_t dataIndex = 0; dataIndex < data.size(); ++dataIndex) {
+        // Get current value
+        TValue currentValue = data[dataIndex] << 8;
+       
+        // Browse bits of currentValue
+        for (std::size_t bitIndex = 0; bitIndex < 8; ++bitIndex) {
+            // Check if need to apply polynomial
+            bool applyPolynomial = ((crc ^ currentValue) & 0x8000) == 0x8000;
+           
+            // Shift left
+            currentValue <<= 1;
+            crc <<= 1;
+           
+            // Apply polynomial if needed
+            if (applyPolynomial) {
+                crc ^= Polynomial;
+            }
+        }
+    }
+   
+    return crc;
+}
 
 #endif /* MP3_HELPER_S_HPP */

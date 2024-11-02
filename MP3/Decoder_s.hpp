@@ -36,25 +36,18 @@ template <class TFunction>
 void Decoder::browseFramesHeader(std::istream &inputStream, TFunction &&browseFunc) {
     unsigned int frameIndex = 0;
 
-    // Create array for header
-    std::array<uint8_t, Frame::Header::headerSize> headerData;
-
     // Frames loop
     for (;;) {
-        // Move to frame at frameIndex
-        if (moveToFrameAtIndex(inputStream, frameIndex) == false) {
-            // Can't find another frame
+        // Get next frame header
+        auto const frameHeader = tryToGetFrameHeaderAtIndex(inputStream, frameIndex);
+
+        // Exit loop if no frame header left
+        if (frameHeader.has_value() == false) {
             break;
         }
 
-        // Read header data (no need to check result, it must be always ok since we call moveToFrameAtIndex which verify it before)
-        tryToReadNextFrameHeaderData(inputStream, headerData);
-
-        // Create frame header
-        Frame::Header header(headerData, _versionMask, _versionValue);
-
-        // Call browseFund and exit if returns false
-        if (browseFunc(header) == false) {
+        // Call browseFunc and exit if returns false
+        if (browseFunc((*frameHeader)) == false) {
             break;
         }
 

@@ -1,7 +1,6 @@
 
 #include <array>
 #include <algorithm>
-#include <optional>
 #include "Decoder.hpp"
 #include "Helper.hpp"
 #include "Frame/Data/Header.hpp"
@@ -95,18 +94,39 @@ namespace MP3 {
 
     Frame::Frame Decoder::getFrameAtIndex(std::istream &inputStream, unsigned int const frameIndex) {
         // Get frame header at frameIndex
-        auto const frameHeader = getFrameHeaderAtIndex(inputStream, frameIndex);
+        auto const frameHeader = tryToGetFrameHeaderAtIndex(inputStream, frameIndex);
+
+        // If no frame header, error
+        if (frameHeader.has_value() == false) {
+            throw FrameNotFound(*this, frameIndex);//TODO: a voir
+        }
 
         // Check CRC if needed
-        if (frameHeader.isCRCProtected() == true) {
-            if (isCRCCorrect(inputStream, frameHeader) == false) {
-                //throw ;
+        if ((*frameHeader).isCRCProtected() == true) {
+            // Get CRC stored and calculated
+            auto crcStored = getCRCStored(inputStream, (*frameHeader));
+            auto crcCalculated = getCRCCalculated(inputStream, (*frameHeader));
+
+            // Check CRC
+            if (crcStored != crcCalculated) {
+                throw FrameCRCIncorrect(*this, crcStored, crcCalculated);//TODO: a voir
             }
         }
         
         // Create side informations
-        Frame::SideInformation const frameSideInformation = getFrameSideInformation(inputStream, frameHeader);
+        Frame::SideInformation const frameSideInformation = getFrameSideInformation(inputStream, (*frameHeader));
 
+        // Get frame data from bit reservoir
+        auto const frameData = getFrameDataFromBitReservoir(inputStream, frameIndex, frameSideInformation);
+
+        // Get frame ancillary data size in bits
+        unsigned int const frameAncillaryDataSizeInBits = 0; //TODO: changer, attention dans le cas ou toutes les données d'une frame sont dans la frame précédente
+
+        // Create frame
+        return Frame::Frame((*frameHeader), frameSideInformation, frameAncillaryDataSizeInBits, frameData, _framesBlocksSubbandsOverlappingValues, _framesShiftedAndMatrixedSubbandsValues);
+    }
+
+    std::vector<uint8_t> Decoder::getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation) {
         // Get frame data
         std::vector<uint8_t> frameData((frameSideInformation.getMainDataSizeInBits() / 8) + (((frameSideInformation.getMainDataSizeInBits() % 8) != 0) ? 1 : 0));
         unsigned int bitReservoirCurrentFrameIndex = frameIndex + ((frameSideInformation.getMainDataBegin() == 0) ? 1 : 0);
@@ -123,7 +143,7 @@ namespace MP3 {
 
             // Go to previous frame
             --bitReservoirCurrentFrameIndex;
-            bitReservoirCurrentFrameHeader = getFrameHeaderAtIndex(inputStream, bitReservoirCurrentFrameIndex);
+            bitReservoirCurrentFrameHeader = tryToGetFrameHeaderAtIndex(inputStream, bitReservoirCurrentFrameIndex);
 
             // Check if we have enough data
             if ((*bitReservoirCurrentFrameHeader).getDataSize() >= beginOffset) {
@@ -150,21 +170,90 @@ namespace MP3 {
 
             // Go to next frame
             ++bitReservoirCurrentFrameIndex;
-            bitReservoirCurrentFrameHeader.emplace(getFrameHeaderAtIndex(inputStream, bitReservoirCurrentFrameIndex));
+            bitReservoirCurrentFrameHeader = tryToGetFrameHeaderAtIndex(inputStream, bitReservoirCurrentFrameIndex);
         }
 
-        unsigned int const frameAncillaryDataSizeInBits = 0; //TODO: changer, attention dans le cas ou toutes les données d'une frame sont dans la frame précédente
-
-        // Create frame
-        return Frame::Frame(frameHeader, frameSideInformation, frameAncillaryDataSizeInBits, frameData, _framesBlocksSubbandsOverlappingValues, _framesShiftedAndMatrixedSubbandsValues);
+        return frameData;
     }
 
-    bool Decoder::isCRCCorrect(std::istream &inputStream, Frame::Header const &frameHeader) {//TODO: voir si passer le frame header
-        inputStream.seekg(frameHeader.getCRCSize(), std::ios_base::cur);//TODO: checker le CRC dans une methode a part
-        return true;
+    uint16_t Decoder::getCRCStored(std::istream &inputStream, Frame::Header const &frameHeader) {
+        // Get stored CRC
+        uint16_t storedCRC;
+        inputStream.read(reinterpret_cast<char *>(&storedCRC), frameHeader.getCRCSize());
+
+        // Convert in little endianness
+        storedCRC = ((storedCRC << 8) & 0xFF00) | (storedCRC >> 8);
+
+        // Avoid stream head change position
+        inputStream.seekg(-static_cast<int>(frameHeader.getCRCSize()), std::ios_base::cur);
+
+        return storedCRC;
     }
 
-    bool Decoder::tryToReadNextFrameHeaderData(std::istream &inputStream, std::array<uint8_t, Frame::Header::headerSize> &headerData) const {
+    uint16_t Decoder::getCRCCalculated(std::istream &inputStream, Frame::Header const &frameHeader) {
+        // Data used in CRC is last 2 bytes of header and all side informations bytes
+        std::vector<uint8_t> data(2 + frameHeader.getSideInformationSize());
+
+        // Need to read 2 last bytes of header first
+        inputStream.seekg(-2, std::ios_base::cur);
+        inputStream.read(reinterpret_cast<char *>(data.data()), 2);
+
+        // Pass CRC bytes
+        inputStream.seekg(frameHeader.getCRCSize(), std::ios_base::cur);
+
+        // Need to read all side informations bytes
+        inputStream.read(reinterpret_cast<char *>(&data.data()[2]), frameHeader.getSideInformationSize());
+
+        // Calculate CRC
+        auto calculatedCRC = Helper::calculateCRC<uint16_t, 0x8005, 0xFFFF>(data);
+
+        // Avoid stream head change position
+        inputStream.seekg(-static_cast<int>(frameHeader.getSideInformationSize()), std::ios_base::cur);//TODO: voir si les autres methodes font la meme chose quand elles bougent la tete de lecture pour la remettre a la fin de la methode pour eviter les effets de bords sauf celles dont c'est le but (et si c'est le but les renommer en move)
+
+        return calculatedCRC;
+    }
+
+    std::optional<Frame::Header> Decoder::tryToGetFrameHeaderAtIndex(std::istream &inputStream, unsigned int const frameIndex) {
+        inputStream.clear();//TODO: a voir
+
+        // Create headerData
+        std::optional<std::array<uint8_t, Frame::Header::headerSize>> headerData;
+
+        // Need to search it if not already in array
+        if (_frameEntries.size() <= frameIndex) {
+            for (unsigned int currentFrameIndex = _frameEntries.size(); currentFrameIndex <= frameIndex; ++currentFrameIndex) {
+                // Set stream cursor to beginning of current frame
+                inputStream.seekg((currentFrameIndex > 0) ? (_frameEntries[currentFrameIndex - 1].positionInBytes + _frameEntries[currentFrameIndex - 1].sizeInBytes) : 0);
+
+                // Try to synchronize to next frame
+                headerData = tryToReadNextFrameHeaderData(inputStream);
+
+                if (headerData.has_value() == false) {
+                    return {};
+                }
+
+                // Create header
+                Frame::Header header((*headerData), _versionMask, _versionValue);
+
+                // Save to array
+                _frameEntries.push_back({ static_cast<unsigned int>(inputStream.tellg()) - static_cast<unsigned int>((*headerData).size()), header.getFrameLength() });
+            }
+        }
+
+        // Set stream cursor to beginning of frame
+        inputStream.seekg(_frameEntries[frameIndex].positionInBytes);
+
+        // Read frame header
+        inputStream.read(reinterpret_cast<char *>((*headerData).data()), (*headerData).size());
+
+        // Create frame header
+        return Frame::Header((*headerData), _versionMask, _versionValue);
+    }
+
+    std::optional<std::array<uint8_t, Frame::Header::headerSize>> Decoder::tryToReadNextFrameHeaderData(std::istream &inputStream) const {
+        // Create headerData
+        std::array<uint8_t, Frame::Header::headerSize> headerData;
+
         // Read 4 first bytes if possible
         inputStream.read(reinterpret_cast<char *>(headerData.data()), headerData.size());
 
@@ -173,7 +262,7 @@ namespace MP3 {
             // Check if header found
             if (Frame::Header::isValidHeader(headerData, _versionMask, _versionValue) == true) {
                 // Found
-                return true;
+                return headerData;
             }
 
             // Shift left the array and get next byte
@@ -182,57 +271,7 @@ namespace MP3 {
         }
 
         // Not found
-        return false;
-    }
-
-    Frame::Header Decoder::getFrameHeaderAtIndex(std::istream &inputStream, unsigned int const frameIndex) {
-        // Move to frame at frameIndex
-        if (moveToFrameAtIndex(inputStream, frameIndex) == false) {
-            // TODO: exception ?
-            throw std::invalid_argument("headerBytes is incorrect");  // TODO: changer par une classe custom
-        }
-
-        // Create header
-        std::array<uint8_t, Frame::Header::headerSize> headerData;
-
-        // Read header data (no need to check result, it must be always ok since we call moveToFrameAtIndex which verify it before)
-        tryToReadNextFrameHeaderData(inputStream, headerData);
-
-        // Create frame header
-        return Frame::Header(headerData, _versionMask, _versionValue);
-    }
-
-    bool Decoder::moveToFrameAtIndex(std::istream &inputStream, unsigned int const frameIndex) {
-        inputStream.clear();//TODO: a voir
-
-        // Need to search it if not already in array
-        if (_frameEntries.size() <= frameIndex) {
-            // Need to find it
-            std::array<uint8_t, Frame::Header::headerSize> headerData;
-
-            for (unsigned int currentFrameIndex = _frameEntries.size(); currentFrameIndex <= frameIndex; ++currentFrameIndex) {
-                // Set stream cursor to beginning of current frame
-                inputStream.seekg((currentFrameIndex > 0) ? (_frameEntries[currentFrameIndex - 1].positionInBytes + _frameEntries[currentFrameIndex - 1].sizeInBytes) : 0);
-
-                // Synchronize to next frame
-                if (tryToReadNextFrameHeaderData(inputStream, headerData) == false) {
-                    // Not found, exit
-                    return false;
-                }
-
-                // Create header
-                Frame::Header header(headerData, _versionMask, _versionValue);
-
-                // Save to array
-                _frameEntries.push_back({ static_cast<unsigned int>(inputStream.tellg()) - static_cast<unsigned int>(headerData.size()), header.getFrameLength() });
-            }
-        }
-
-        // Set stream cursor to beginning of frame
-        inputStream.seekg(_frameEntries[frameIndex].positionInBytes);
-
-        // Ok
-        return true;
+        return {};
     }
 
     Frame::SideInformation Decoder::getFrameSideInformation(std::istream &inputStream, Frame::Header const &frameHeader) const {
