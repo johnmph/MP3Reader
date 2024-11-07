@@ -47,7 +47,7 @@ void Decoder::browseFramesHeader(std::istream &inputStream, TFunction &&browseFu
         }
 
         // Call browseFunc and exit if returns false
-        if (browseFunc((*frameHeader)) == false) {
+        if (browseFunc(*frameHeader) == false) {
             break;
         }
 

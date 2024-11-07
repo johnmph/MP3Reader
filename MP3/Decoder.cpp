@@ -1,6 +1,7 @@
 
 #include <array>
 #include <algorithm>
+#include <utility>
 #include "Decoder.hpp"
 #include "Helper.hpp"
 #include "Frame/Data/Header.hpp"
@@ -101,34 +102,44 @@ namespace MP3 {
             throw FrameNotFound(*this, frameIndex);//TODO: a voir
         }
 
-        // Check CRC if needed
-        if ((*frameHeader).isCRCProtected() == true) {
-            // Get CRC stored and calculated
-            auto crcStored = getCRCStored(inputStream, (*frameHeader));
-            auto crcCalculated = getCRCCalculated(inputStream, (*frameHeader));
+        // Get stored CRC if needed
+        auto crcStored = getCRCIfExist(inputStream, (*frameHeader));
 
-            // Check CRC
-            if (crcStored != crcCalculated) {
-                throw FrameCRCIncorrect(*this, crcStored, crcCalculated);//TODO: a voir
-            }
-        }
-        
-        // Create side informations
-        Frame::SideInformation const frameSideInformation = getFrameSideInformation(inputStream, (*frameHeader));
+        // Get frame side information data
+        auto const frameSideInformationData = Helper::getDataFromStream(inputStream, (*frameHeader).getSideInformationSize());
+
+        // Create frame side informations
+        Frame::SideInformation const frameSideInformation((*frameHeader), frameSideInformationData);
 
         // Get frame data from bit reservoir
         auto const frameData = getFrameDataFromBitReservoir(inputStream, frameIndex, frameSideInformation);
 
+        // If no frame data, error
+        if (frameData.has_value() == false) {
+            throw std::exception();//TODO: changer, passer le frameHeaderData, le frameSideInformationData, le crc ?
+        }
+
         // Get frame ancillary data size in bits
         unsigned int const frameAncillaryDataSizeInBits = 0; //TODO: changer, attention dans le cas ou toutes les données d'une frame sont dans la frame précédente
 
+        // Check CRC if needed
+        if ((*frameHeader).isCRCProtected() == true) {
+            auto crcCalculated = calculateCRC((*frameHeader).getData(), frameSideInformationData);
+
+            // Check CRC
+            if (crcStored != crcCalculated) {
+                //throw FrameCRCIncorrect(*this, (*frameHeader).getData(), frameSideInformationData, (*frameData), crcStored, crcCalculated);//TODO: a voir
+                throw std::exception();//TODO: changer
+            }
+        }
+
         // Create frame
-        return Frame::Frame((*frameHeader), frameSideInformation, frameAncillaryDataSizeInBits, frameData, _framesBlocksSubbandsOverlappingValues, _framesShiftedAndMatrixedSubbandsValues);
+        return Frame::Frame((*frameHeader), frameSideInformation, frameAncillaryDataSizeInBits, (*frameData), _framesBlocksSubbandsOverlappingValues, _framesShiftedAndMatrixedSubbandsValues);
     }
 
-    std::vector<uint8_t> Decoder::getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation) {
+    std::optional<std::vector<uint8_t>> Decoder::getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation) {
         // Get frame data
-        std::vector<uint8_t> frameData((frameSideInformation.getMainDataSizeInBits() / 8) + (((frameSideInformation.getMainDataSizeInBits() % 8) != 0) ? 1 : 0));
+        std::vector<uint8_t> frameData((frameSideInformation.getMainDataSizeInBits() / 8) + (((frameSideInformation.getMainDataSizeInBits() % 8) != 0) ? 1 : 0), 0);
         unsigned int bitReservoirCurrentFrameIndex = frameIndex + ((frameSideInformation.getMainDataBegin() == 0) ? 1 : 0);
 
         // Loop to find first frame to read
@@ -137,8 +148,8 @@ namespace MP3 {
 
         for (;;) {
             // If first frame and we don't have all data, error
-            if (bitReservoirCurrentFrameIndex == 0) {//TODO: voir si mettre ici ou dans getFrameHeaderAtIndex et si oui voir pour le type unsigned int ou signed car -1
-                // TODO: thrower exception: plutot un code erreur car c'est le fichier qui est mal formé et pas une erreur de programmation !!!
+            if (bitReservoirCurrentFrameIndex == 0) {
+                return {};//TODO: a la place de quitter avec une erreur sans rien lire, peut etre lire la partie qu'on sait et laisser des 0 au debut sur tout ce qu'on n'a pas su lire mais quand meme notifier l'erreur pour qu'on puisse thrower dans la methode appelante tout en ayant les données dispo pour l'exception
             }
 
             // Go to previous frame
@@ -176,40 +187,37 @@ namespace MP3 {
         return frameData;
     }
 
-    uint16_t Decoder::getCRCStored(std::istream &inputStream, Frame::Header const &frameHeader) {
+    uint16_t Decoder::getCRCIfExist(std::istream &inputStream, Frame::Header const &frameHeader) {
+        // If no CRC protected, exit
+        if (frameHeader.isCRCProtected() == false) {
+            return 0;
+        }
+
         // Get stored CRC
         uint16_t storedCRC;
         inputStream.read(reinterpret_cast<char *>(&storedCRC), frameHeader.getCRCSize());
 
         // Convert in little endianness
-        storedCRC = ((storedCRC << 8) & 0xFF00) | (storedCRC >> 8);
+        storedCRC = ((storedCRC << 8) & 0xFF00) | (storedCRC >> 8);//TODO: mettre dans une fonction helper invertEndianness (template sur le type)
 
-        // Avoid stream head change position
-        inputStream.seekg(-static_cast<int>(frameHeader.getCRCSize()), std::ios_base::cur);
-
+        // Return it
         return storedCRC;
     }
 
-    uint16_t Decoder::getCRCCalculated(std::istream &inputStream, Frame::Header const &frameHeader) {
+    uint16_t Decoder::calculateCRC(std::array<uint8_t, 4> const &headerData, std::vector<uint8_t> const &sideInformationData) {
         // Data used in CRC is last 2 bytes of header and all side informations bytes
-        std::vector<uint8_t> data(2 + frameHeader.getSideInformationSize());
+        std::vector<uint8_t> data(2 + sideInformationData.size());
 
-        // Need to read 2 last bytes of header first
-        inputStream.seekg(-2, std::ios_base::cur);
-        inputStream.read(reinterpret_cast<char *>(data.data()), 2);
+        // Copy 2 last bytes of header first
+        std::copy(std::next(std::cbegin(headerData), 2), std::cend(headerData), std::begin(data));
 
-        // Pass CRC bytes
-        inputStream.seekg(frameHeader.getCRCSize(), std::ios_base::cur);
-
-        // Need to read all side informations bytes
-        inputStream.read(reinterpret_cast<char *>(&data.data()[2]), frameHeader.getSideInformationSize());
+        // Copy all side informations bytes
+        std::copy(std::cbegin(sideInformationData), std::cend(sideInformationData), std::next(std::begin(data), 2));
 
         // Calculate CRC
-        auto calculatedCRC = Helper::calculateCRC<uint16_t, 0x8005, 0xFFFF>(data);
+        auto calculatedCRC = Helper::calculateCRC<uint16_t, 0x8005, 0xFFFF>(data);//TODO: mettre les valeurs dans des constantes
 
-        // Avoid stream head change position
-        inputStream.seekg(-static_cast<int>(frameHeader.getSideInformationSize()), std::ios_base::cur);//TODO: voir si les autres methodes font la meme chose quand elles bougent la tete de lecture pour la remettre a la fin de la methode pour eviter les effets de bords sauf celles dont c'est le but (et si c'est le but les renommer en move)
-
+        // Return it
         return calculatedCRC;
     }
 
@@ -272,11 +280,6 @@ namespace MP3 {
 
         // Not found
         return {};
-    }
-
-    Frame::SideInformation Decoder::getFrameSideInformation(std::istream &inputStream, Frame::Header const &frameHeader) const {
-        // Get SideInformation
-        return Frame::SideInformation(frameHeader, Helper::getDataFromStream(inputStream, frameHeader.getSideInformationSize() * 8));//TODO : voir si garder getDataFromStream en bits!
     }
 
 }

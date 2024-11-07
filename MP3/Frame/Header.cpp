@@ -7,14 +7,14 @@
 
 namespace MP3::Frame {
 
-    bool Header::isValidHeader(std::array<uint8_t, headerSize> const &headerBytes, uint8_t const versionMask, uint8_t const versionValue) {
+    bool Header::isValidHeader(std::array<uint8_t, headerSize> const &data, uint8_t const versionMask, uint8_t const versionValue) {
         // Check first byte
-        if (headerBytes[0] != 0xFF) {
+        if (data[0] != 0xFF) {
             return false;
         }
 
         // Check second byte
-        if ((headerBytes[1] & versionMask) != versionValue) {
+        if ((data[1] & versionMask) != versionValue) {
             return false;
         }
 
@@ -22,14 +22,18 @@ namespace MP3::Frame {
         return true;
     }
 
-    Header::Header(std::array<uint8_t, headerSize> const &headerBytes, uint8_t const versionMask, uint8_t const versionValue) {
-        // Check if headerBytes is correct
-        if (isValidHeader(headerBytes, versionMask, versionValue) == false) {
-            throw std::invalid_argument("headerBytes is incorrect");  // TODO: changer par une classe custom
+    Header::Header(std::array<uint8_t, headerSize> const &data, uint8_t const versionMask, uint8_t const versionValue) : _data(data) {
+        // Check if data is correct
+        if (isValidHeader(data, versionMask, versionValue) == false) {
+            throw std::invalid_argument("Data is incorrect");  // TODO: changer par une classe custom
         }
 
-        // Decode header bytes
-        decodeHeaderBytes(headerBytes);
+        // Decode data
+        decode();
+    }
+
+    std::array<uint8_t, Header::headerSize> const &Header::getData() const {
+        return _data;
     }
 
     unsigned int Header::getFrameSize() const {
@@ -105,46 +109,53 @@ namespace MP3::Frame {
         return _isOriginal;
     }
 
-    void Header::decodeHeaderBytes(std::array<uint8_t, headerSize> const &headerBytes) {
+    void Header::verify() const {
+        // Bitrate index can't be 0 or 15 (value 0 or -1 in the table) TODO: voir pour 0 car c'est le mode free
+        if ((_bitrate == 0) || (_bitrate == -1)) {
+            throw std::exception();//TODO: changer
+        }
+
+        // Sampling rate index can't be 3 (reserved)
+        if (_samplingRateIndex == 3) {
+            throw std::exception();//TODO: changer
+        }
+
+        // TODO: est ce une erreur d'avoir ms stereo ou intensity stereo set alors qu'on est pas en joint stereo ou faut il juste ignorer ?
+    }
+
+    void Header::decode() {
         unsigned int dataBitIndex = 15;//TODO: pour tester on a mis 14 et 16 et on est dans une boucle infinie ? a verifier car si fichier mal formé on peut bloquer ?
 
         // Set isCRCProtected
-        _isCRCProtected = Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 1) == 0x0;
+        _isCRCProtected = Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 1) == 0x0;
 
         // Set bitrate
-        _bitrate = Data::bitrates[Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 4)];
+        _bitrate = Data::bitrates[Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 4)];
 
         // Set sampling rate index
-        _samplingRateIndex = Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 2);
+        _samplingRateIndex = Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 2);
 
         // Set padding bit
-        _isPadded = Helper::getBitsAtIndex<bool>(headerBytes, dataBitIndex, 1);
+        _isPadded = Helper::getBitsAtIndex<bool>(_data, dataBitIndex, 1);
 
         // Set private bit
-        _privateBit = Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 1);
+        _privateBit = Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 1);
 
         // Set channel mode
-        _channelMode = static_cast<ChannelMode>(Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 2));
+        _channelMode = static_cast<ChannelMode>(Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 2));
 
         // Set MS Stereo and Intensity Stereo
-        _isMSStereo = Helper::getBitsAtIndex<bool>(headerBytes, dataBitIndex, 1);
-        _isIntensityStereo = Helper::getBitsAtIndex<bool>(headerBytes, dataBitIndex, 1);
+        _isMSStereo = Helper::getBitsAtIndex<bool>(_data, dataBitIndex, 1);
+        _isIntensityStereo = Helper::getBitsAtIndex<bool>(_data, dataBitIndex, 1);
 
         // Set copyright
-        _isCopyrighted = Helper::getBitsAtIndex<bool>(headerBytes, dataBitIndex, 1);
+        _isCopyrighted = Helper::getBitsAtIndex<bool>(_data, dataBitIndex, 1);
 
         // Set original
-        _isOriginal = Helper::getBitsAtIndex<bool>(headerBytes, dataBitIndex, 1);
+        _isOriginal = Helper::getBitsAtIndex<bool>(_data, dataBitIndex, 1);
 
         // Set emphasis
-        _emphasis = static_cast<Emphasis>(Helper::getBitsAtIndex<unsigned int>(headerBytes, dataBitIndex, 2));
-/*
-        // Check if bitrate is ok
-        if ((_bitrate == 0) || (_bitrate == -1)) {
-            //throw ;
-        }
-*/
-
+        _emphasis = static_cast<Emphasis>(Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 2));
     }
 
 }

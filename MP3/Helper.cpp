@@ -4,18 +4,18 @@
 
 namespace MP3::Helper {
 
-    std::vector<uint8_t> getDataFromStream(std::istream &inputStream, unsigned int sizeInBits) {//TODO: si sizeInBits n'est pas multiple de 8 ???
-        // Get size in bytes
-        auto sizeInBytes = (sizeInBits / 8) + (((sizeInBits % 8) != 0) ? 1 : 0);
-
+    std::vector<uint8_t> getDataFromStream(std::istream &inputStream, unsigned int size) {
         // Create data
-        std::vector<uint8_t> data(sizeInBytes);
-
-        // TODO: verifier taille flux
+        std::vector<uint8_t> data(size, 0);
 
         // Read data
-        inputStream.read(reinterpret_cast<char *>(data.data()), sizeInBytes);
+        inputStream.read(reinterpret_cast<char *>(data.data()), size);
 
+        // Verify that we read all data
+        if (inputStream.gcount() != size) {
+            throw std::exception();//TODO: changer
+        }
+        
         return data;
     }
     

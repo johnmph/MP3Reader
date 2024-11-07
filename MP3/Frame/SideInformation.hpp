@@ -47,16 +47,20 @@ namespace MP3::Frame {
 
         SideInformation(Header const &header, std::vector<uint8_t> const &data);
 
+        std::vector<uint8_t> const &getData() const;
         unsigned int getMainDataBegin() const;
         unsigned int getMainDataSizeInBits() const;
         unsigned int getPrivateBits() const;
         bool getScaleFactorShare(unsigned int const channelIndex, unsigned int const scaleFactorShareIndex) const;
         SideInformationGranule const &getGranule(unsigned int const granuleIndex, unsigned int const channelIndex) const;
 
-    private:
-        void extract(std::vector<uint8_t> const &data);
-        SideInformationGranule extractGranule(std::vector<uint8_t> const &data, unsigned int &dataBitIndex);
+        void verify() const;
 
+    private:
+        void extract();
+        SideInformationGranule extractGranule(unsigned int &dataBitIndex);
+
+        std::vector<uint8_t> _data;
         Header const &_header;
         unsigned int _mainDataBegin;
         unsigned int _privateBits;

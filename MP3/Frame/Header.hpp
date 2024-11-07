@@ -26,10 +26,11 @@ namespace MP3::Frame {
 
         static constexpr unsigned int headerSize = 4;
 
-        static bool isValidHeader(std::array<uint8_t, headerSize> const &headerBytes, uint8_t const versionMask, uint8_t const versionValue);
+        static bool isValidHeader(std::array<uint8_t, headerSize> const &data, uint8_t const versionMask, uint8_t const versionValue);
 
-        Header(std::array<uint8_t, headerSize> const &headerBytes, uint8_t const versionMask, uint8_t const versionValue);
+        Header(std::array<uint8_t, headerSize> const &data, uint8_t const versionMask, uint8_t const versionValue);
 
+        std::array<uint8_t, headerSize> const &getData() const;
         unsigned int getFrameSize() const;
         unsigned int getFrameLength() const;
         unsigned int getCRCSize() const;
@@ -48,9 +49,12 @@ namespace MP3::Frame {
         bool isCopyrighted() const;
         bool isOriginal() const;
 
-    private:
-        void decodeHeaderBytes(std::array<uint8_t, headerSize> const &headerBytes);
+        void verify() const;
 
+    private:
+        void decode();//TODO: mettre un nom qui est du meme genre que dans SideInformation et Frame
+
+        std::array<uint8_t, headerSize> _data;
         unsigned int _bitrate;
         unsigned int _samplingRateIndex;
         ChannelMode _channelMode;

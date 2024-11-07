@@ -13,6 +13,13 @@
 namespace MP3::Frame {
 
     Frame::Frame(Header const &header, SideInformation const &sideInformation, unsigned int const ancillaryDataSizeInBits, std::vector<uint8_t> const &data, std::array<std::array<float, 576>, 2> &blocksSubbandsOverlappingValues, std::array<std::array<float, 1024>, 2> &shiftedAndMatrixedSubbandsValues) : _header(header), _sideInformation(sideInformation), _data(data), _dataBitIndex(0), _blocksSubbandsOverlappingValues(blocksSubbandsOverlappingValues), _shiftedAndMatrixedSubbandsValues(shiftedAndMatrixedSubbandsValues) {
+        // Verify header
+        _header.verify();
+
+        // Verify side information
+        _sideInformation.verify();
+        
+        // Resize vectors
         for (unsigned int index = 0; index < 2; ++index) {
             // Resize scaleFactors vector (variable number of channels)
             _scaleFactors[index].resize(_header.getNumberOfChannels());

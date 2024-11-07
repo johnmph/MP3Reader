@@ -9,7 +9,7 @@
 
 namespace MP3::Helper {
 
-    std::vector<uint8_t> getDataFromStream(std::istream &inputStream, unsigned int sizeInBits);     //TODO: surement en octets plutot
+    std::vector<uint8_t> getDataFromStream(std::istream &inputStream, unsigned int size);
 
     template <typename TValue, typename TData>
     TValue getBitsAtIndex(TData const &data, unsigned int &index, unsigned int size);

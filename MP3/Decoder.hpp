@@ -43,12 +43,11 @@ namespace MP3 {
             unsigned int positionInBytes;
         };*/
 
-        std::vector<uint8_t> getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation);
-        uint16_t getCRCStored(std::istream &inputStream, Frame::Header const &frameHeader);
-        uint16_t getCRCCalculated(std::istream &inputStream, Frame::Header const &frameHeader);
+        std::optional<std::vector<uint8_t>> getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation);
+        uint16_t getCRCIfExist(std::istream &inputStream, Frame::Header const &frameHeader);
+        uint16_t calculateCRC(std::array<uint8_t, 4> const &headerData, std::vector<uint8_t> const &sideInformationData);
         std::optional<Frame::Header> tryToGetFrameHeaderAtIndex(std::istream &inputStream, unsigned int const frameIndex);
         std::optional<std::array<uint8_t, Frame::Header::headerSize>> tryToReadNextFrameHeaderData(std::istream &inputStream) const;
-        Frame::SideInformation getFrameSideInformation(std::istream &inputStream, Frame::Header const &frameHeader) const;
 
         uint8_t const _versionMask;
         uint8_t const _versionValue;
