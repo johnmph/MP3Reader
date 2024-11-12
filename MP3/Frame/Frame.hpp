@@ -5,6 +5,11 @@
 #include <array>
 #include <vector>
 #include <unordered_map>
+#include <utility>
+#include <optional>
+#include "../Helper.hpp"
+#include "Data/Frame.hpp"
+#include "Data/HuffmanTables.hpp"
 #include "Header.hpp"
 #include "SideInformation.hpp"
 
@@ -20,7 +25,8 @@ namespace MP3::Frame {
 
         // TODO: avoir une methode pour soit renvoyer les PCM samples (getPCMSamples), soit une methode browsePCMSamples a qui on passe une fonction
         // TODO: avoir un getter pour savoir combien de bits a vraiment besoin cette frame, pour savoir ce que on laisse au bit reservoir
-        Frame(Header const &header, SideInformation const &sideInformation, unsigned int ancillaryDataSizeInBits, std::vector<uint8_t> const &data, std::array<std::array<float, 576>, 2> &blocksSubbandsOverlappingValues, std::array<std::array<float, 1024>, 2> &shiftedAndMatrixedSubbandsValues);
+        template <class TFunction>
+        Frame(Header const &header, SideInformation const &sideInformation, unsigned int ancillaryDataSizeInBits, std::vector<uint8_t> const &data, std::array<std::array<float, 576>, 2> &blocksSubbandsOverlappingValues, std::array<std::array<float, 1024>, 2> &shiftedAndMatrixedSubbandsValues, TFunction &&errorFunction);
 
         unsigned int getNumberOfChannels() const;
         unsigned int getBitrate() const;
@@ -38,9 +44,13 @@ namespace MP3::Frame {
 
 
     private:
-        void extractMainData();
+        template <class TFunction>
+        void extractMainData(TFunction &&errorFunction);
+
+        template <class TFunction>
+        void extractFrequencyLineValues(unsigned int const granuleIndex, unsigned int const channelIndex, unsigned int const granuleStartDataBitIndex, TFunction &&errorFunction);
+
         void extractScaleFactors(unsigned int const granuleIndex, unsigned int const channelIndex);
-        void extractFrequencyLineValues(unsigned int const granuleIndex, unsigned int const channelIndex, unsigned int const granuleStartDataBitIndex);
         void requantizeFrequencyLineValues(unsigned int const granuleIndex, unsigned int const channelIndex);
         void reorderShortWindows(unsigned int const granuleIndex, unsigned int const channelIndex);
         void processStereo(unsigned int const granuleIndex);
@@ -50,7 +60,7 @@ namespace MP3::Frame {
         unsigned int getBigValuesRegionForFrequencyLineIndex(SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const;
         
         template <class TValueType>
-        TValueType decodeHuffmanCode(unsigned int const granulePart23LengthInBits, unsigned int const granuleStartDataBitIndex, std::unordered_map<unsigned int, TValueType> const &huffmanTable);
+        std::pair<std::optional<TValueType>, unsigned int> decodeHuffmanCode(unsigned int const granulePart23LengthInBits, unsigned int const granuleStartDataBitIndex, std::unordered_map<unsigned int, TValueType> const &huffmanTable, unsigned int const maxEntryBitLength);
 
         int huffmanCodeApplyLinbitsAndSign(int value, unsigned int const linbits);
         int huffmanCodeApplySign(int value);
@@ -85,6 +95,42 @@ namespace MP3::Frame {
         std::array<std::array<float, 576>, 2> &_blocksSubbandsOverlappingValues;
         std::array<std::array<float, 1024>, 2> &_shiftedAndMatrixedSubbandsValues;
     };
+
+    namespace Error {
+
+        struct Exception : std::exception {
+            Exception(Frame &frame) :_frame(frame) {}
+
+        private:
+            Frame &_frame;//TODO: faire attention avec cette reference car une exception dans le constructor invalide cette reference et donc soit separer error et exception soit ne pas sauver une reference sur frame ici !!!
+        };
+
+        template <typename TValue>
+        struct HuffmanCodeNotFound : Exception {
+            HuffmanCodeNotFound(Frame &frame, unsigned int huffmanCodedValue, TValue &huffmanDecodedValue, unsigned int frequencyLineIndex) : Exception(frame), _huffmanCodedValue(huffmanCodedValue), _huffmanDecodedValue(huffmanDecodedValue), _frequencyLineIndex(frequencyLineIndex) {}
+
+            unsigned int getHuffmanCodedValue() const {
+                return _huffmanCodedValue;
+            }
+
+            TValue &getHuffmanDecodedValue() const {
+                return _huffmanDecodedValue;
+            }
+
+            unsigned int getFrequencyLineIndex() const {
+                return _frequencyLineIndex;
+            }
+
+        private:
+            unsigned int const _huffmanCodedValue;
+            TValue &_huffmanDecodedValue;
+            unsigned int const _frequencyLineIndex;
+        };
+
+    }
+
+
+    #include "Frame_s.hpp"
 
 }
 

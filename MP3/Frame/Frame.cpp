@@ -1,42 +1,13 @@
 
 #include <cmath>
 #include "Frame.hpp"
-#include "../Helper.hpp"
 #include "Data/Header.hpp"
-#include "Data/Frame.hpp"
-#include "Data/HuffmanTables.hpp"
 #include "Data/ScaleFactorBands.hpp"
 #include "Data/SynthesisFilterBank.hpp"
 #include "Data/SynthesisWindow.hpp"
 
 //TODO: bien verifier pour les conditions et le code executé pour les types de block, si mixed ou pas, ...
 namespace MP3::Frame {
-
-    Frame::Frame(Header const &header, SideInformation const &sideInformation, unsigned int const ancillaryDataSizeInBits, std::vector<uint8_t> const &data, std::array<std::array<float, 576>, 2> &blocksSubbandsOverlappingValues, std::array<std::array<float, 1024>, 2> &shiftedAndMatrixedSubbandsValues) : _header(header), _sideInformation(sideInformation), _data(data), _dataBitIndex(0), _blocksSubbandsOverlappingValues(blocksSubbandsOverlappingValues), _shiftedAndMatrixedSubbandsValues(shiftedAndMatrixedSubbandsValues) {
-        // Verify header
-        _header.verify();
-
-        // Verify side information
-        _sideInformation.verify();
-        
-        // Resize vectors
-        for (unsigned int index = 0; index < 2; ++index) {
-            // Resize scaleFactors vector (variable number of channels)
-            _scaleFactors[index].resize(_header.getNumberOfChannels());
-
-            // Resize frequencyLineValues vector (variable number of channels)
-            _frequencyLineValues[index].resize(_header.getNumberOfChannels());
-
-            // Resize startingRzeroFrequencyLineIndexes vector (variable number of channels)
-            _startingRzeroFrequencyLineIndexes[index].resize(2 * _header.getNumberOfChannels());
-        }
-
-        // Resize pcmValues vector (Keep 2 granules by array but variable number of channels)
-        _pcmValues.resize(_header.getNumberOfChannels());
-
-        // Extract main data
-        extractMainData();
-    }
 
     unsigned int Frame::getNumberOfChannels() const {
         return _header.getNumberOfChannels();
@@ -81,42 +52,6 @@ namespace MP3::Frame {
 
     std::array<float, 1152> const &Frame::getPCMSamples(unsigned int const channelIndex) const {
         return _pcmValues[channelIndex];
-    }
-
-    void Frame::extractMainData() {
-        // Browse granules
-        for (unsigned int granuleIndex = 0; granuleIndex < 2; ++granuleIndex) {
-            // Browse channels
-            for (unsigned int channelIndex = 0; channelIndex < _header.getNumberOfChannels(); ++channelIndex) {
-                // Save dataBitIndex before start extracting granule data
-                auto const granuleStartDataBitIndex = _dataBitIndex;
-
-                // Extract scale factors
-                extractScaleFactors(granuleIndex, channelIndex);
-
-                // Extract frequency line values
-                extractFrequencyLineValues(granuleIndex, channelIndex, granuleStartDataBitIndex);
-
-                // Requantize frequency line values
-                requantizeFrequencyLineValues(granuleIndex, channelIndex);
-
-                // Reorder short windows
-                reorderShortWindows(granuleIndex, channelIndex);
-            }
-
-            // Process stereo (need to be done when all channels are decoded)
-            processStereo(granuleIndex);
-        }
-
-        // What is following can't be done before finishing processStereo, it's why we separated it to another loop
-        // Browse granules
-        for (unsigned int granuleIndex = 0; granuleIndex < 2; ++granuleIndex) {
-            // Browse channels
-            for (unsigned int channelIndex = 0; channelIndex < _header.getNumberOfChannels(); ++channelIndex) {
-                // Synthesis FilterBank
-                synthesisFilterBank(granuleIndex, channelIndex);
-            }
-        }
     }
 
     void Frame::extractScaleFactors(unsigned int const granuleIndex, unsigned int const channelIndex) {
@@ -165,89 +100,7 @@ namespace MP3::Frame {
             }
         }
     }
-
-    void Frame::extractFrequencyLineValues(unsigned int const granuleIndex, unsigned int const channelIndex, unsigned int const granuleStartDataBitIndex) {
-        // Get current granule
-        auto const &currentGranule = _sideInformation.getGranule(granuleIndex, channelIndex);
-
-        // Get current frequency line values vector
-        auto &currentFrequencyLineValues = _frequencyLineValues[granuleIndex][channelIndex];
-
-        // Get current starting Rzero frequency line index
-        auto &currentStartingRzeroFrequencyLineIndex = _startingRzeroFrequencyLineIndexes[granuleIndex][channelIndex];
-
-        // Browse all frequency lines
-        unsigned int frequencyLineIndex = 0;
-
-        // Start with bigValues
-        for (; (frequencyLineIndex < (currentGranule.bigValues * 2)) && (frequencyLineIndex < 576); frequencyLineIndex += 2) {//TODO: 576 dans une const
-            // Get current region
-            auto const currentRegion = getBigValuesRegionForFrequencyLineIndex(currentGranule, frequencyLineIndex);
-
-            // Get huffman table index
-            auto const huffmanTableIndex = currentGranule.tableSelect[currentRegion];
-
-            Data::QuantizedValuePair decodedValue = { 0, 0 };
-
-            // If huffman table is zero, don't read in stream but set all the region to 0
-            if (huffmanTableIndex > 0) {
-                // Get huffman table
-                auto const &huffmanData = Data::bigValuesData[huffmanTableIndex];
-
-                // Decode data
-                decodedValue = decodeHuffmanCode(currentGranule.par23Length, granuleStartDataBitIndex, huffmanData.table);
-
-                // Correct data
-                decodedValue.x = huffmanCodeApplyLinbitsAndSign(decodedValue.x, huffmanData.linbits);
-                decodedValue.y = huffmanCodeApplyLinbitsAndSign(decodedValue.y, huffmanData.linbits);
-            }
-
-            // Add to currentFrequencyLineValues
-            currentFrequencyLineValues[frequencyLineIndex] = decodedValue.x;
-            currentFrequencyLineValues[frequencyLineIndex + 1] = decodedValue.y;
-        }
-        
-        // Then we have Count1 values
-        for (; ((_dataBitIndex - granuleStartDataBitIndex) < currentGranule.par23Length) && (frequencyLineIndex < (576 - 3)); frequencyLineIndex += 4) {
-            Data::QuantizedValueQuadruple decodedValue;
-
-            // Decode value if table is A
-            if (currentGranule.isCount1TableB == false) {
-                // Decode data
-                decodedValue = decodeHuffmanCode(currentGranule.par23Length, granuleStartDataBitIndex, Data::count1TableA);
-            }
-            // Simply get 4 bits and invert them if table is B
-            else {
-                // Get data
-                decodedValue.v = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1) ^ 0x1;
-                decodedValue.w = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1) ^ 0x1;
-                decodedValue.x = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1) ^ 0x1;
-                decodedValue.y = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1) ^ 0x1;
-            }
-
-            // Correct data
-            decodedValue.v = huffmanCodeApplySign(decodedValue.v);
-            decodedValue.w = huffmanCodeApplySign(decodedValue.w);
-            decodedValue.x = huffmanCodeApplySign(decodedValue.x);
-            decodedValue.y = huffmanCodeApplySign(decodedValue.y);
-
-            // Add to currentFrequencyLineValues
-            currentFrequencyLineValues[frequencyLineIndex] = decodedValue.v;
-            currentFrequencyLineValues[frequencyLineIndex + 1] = decodedValue.w;
-            currentFrequencyLineValues[frequencyLineIndex + 2] = decodedValue.x;
-            currentFrequencyLineValues[frequencyLineIndex + 3] = decodedValue.y;
-        }
-
-        // Then we have Rzero values
-        // Save start of Rzero values
-        currentStartingRzeroFrequencyLineIndex = frequencyLineIndex;
-
-        for (; frequencyLineIndex < 576; ++frequencyLineIndex) {
-            // Add 0 to currentFrequencyLineValues
-            currentFrequencyLineValues[frequencyLineIndex] = 0;
-        }
-    }
-
+    
     void Frame::requantizeFrequencyLineValues(unsigned int const granuleIndex, unsigned int const channelIndex) {
         // Get current granule
         auto const &currentGranule = _sideInformation.getGranule(granuleIndex, channelIndex);
@@ -411,22 +264,6 @@ namespace MP3::Frame {
         return 2;
     }
 
-    template <class TValueType>
-    TValueType Frame::decodeHuffmanCode(unsigned int const granulePart23LengthInBits, unsigned int const granuleStartDataBitIndex, std::unordered_map<unsigned int, TValueType> const &huffmanTable) {
-        // Browse huffman code
-        for (unsigned int code = 1; (_dataBitIndex - granuleStartDataBitIndex) < granulePart23LengthInBits;) {
-            code <<= 1;
-            code |= Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, 1);
-
-            auto const &pair = huffmanTable.find(code);
-            if (pair != std::end(huffmanTable)) {
-                return pair->second;
-            }
-        }
-
-        return {};
-    }
-
     int Frame::huffmanCodeApplyLinbitsAndSign(int value, unsigned int const linbits) {
         //TODO: thrower si on depasse la taille de la granule
         // Add linbits if necessary
@@ -461,22 +298,6 @@ namespace MP3::Frame {
         
         // Return 0 if scaleFactor band index not found else return subblockGain * 8
         return (scaleFactorBandIndex != 12) ? (8 * std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).subblockGain[getCurrentWindowIndexForFrequencyLineIndex(scaleFactorBandIndex, frequencyLineIndex)]) : 0;
-    }
-
-    template <class TScaleFactorBandTable>
-    unsigned int Frame::getScaleFactorBandIndexForFrequencyLineIndex(TScaleFactorBandTable const &scaleFactorBands, unsigned int const frequencyLineIndex) const {
-        // TODO: assert sur frequencyLineIndex < 576 : ATTENTION POUR LES SHORT BLOCKS c'est < 192
-        // Browse all scale factor bands
-        for (unsigned int scaleFactorBandIndex = 0; scaleFactorBandIndex < scaleFactorBands.size(); ++scaleFactorBandIndex) {
-            // If frequency line index is in current scale factor band
-            if (frequencyLineIndex <= scaleFactorBands[scaleFactorBandIndex]) {
-                // Return scaleFactorBandIndex
-                return scaleFactorBandIndex;
-            }
-        }
-
-        // Not found
-        return -1;//TODO: exception normalement
     }
 
     unsigned int Frame::getCurrentWindowIndexForFrequencyLineIndex(unsigned int const scaleFactorBandIndex, unsigned int const frequencyLineIndex) const {

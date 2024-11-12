@@ -114,6 +114,31 @@ struct PortAudio {//TODO:renommer
     }
 
 private:
+    bool processError(MP3::Error::FrameCRCIncorrect const &frameCRCIncorrect) {
+        //TODO: mettre des std cout pour verifier mais il faut mettre les getters avant dans les classes d'error
+        std::cout << "Error : FrameCRCIncorrect (index = " << frameCRCIncorrect.getFrameIndex() << ", crc stored = " << frameCRCIncorrect.getCRCStored() << ", crc calculated = " << frameCRCIncorrect.getCRCCalculated() << ")\n";
+
+        return true;
+    }
+
+    bool processError(MP3::Error::FrameNoData const &frameNoData) {
+        std::cout << "Error : FrameNoData\n";
+
+        return false;
+    }
+
+    bool processError(MP3::Frame::Error::HuffmanCodeNotFound<MP3::Frame::Data::QuantizedValuePair> const &huffmanCodeNotFound) {
+        std::cout << "Error : HuffmanCodeNotFound (frequency line index = " << huffmanCodeNotFound.getFrequencyLineIndex() << ", huffman coded value = " << huffmanCodeNotFound.getHuffmanCodedValue() << ", huffman decoded value = " << huffmanCodeNotFound.getHuffmanDecodedValue().x << ", " << huffmanCodeNotFound.getHuffmanDecodedValue().y << ")\n";
+
+        return false;
+    }
+
+    bool processError(MP3::Frame::Error::HuffmanCodeNotFound<MP3::Frame::Data::QuantizedValueQuadruple> const &huffmanCodeNotFound) {
+        std::cout << "Error : HuffmanCodeNotFound (frequency line index = " << huffmanCodeNotFound.getFrequencyLineIndex() << ", huffman coded value = " << huffmanCodeNotFound.getHuffmanCodedValue() << ", huffman decoded value = " << huffmanCodeNotFound.getHuffmanDecodedValue().x << ", " << huffmanCodeNotFound.getHuffmanDecodedValue().y << ", " << huffmanCodeNotFound.getHuffmanDecodedValue().v << ", " << huffmanCodeNotFound.getHuffmanDecodedValue().w << ")\n";
+
+        return false;
+    }
+
     /* The instance callback, where we have access to every method/variable in object of class Sine */
     int paCallbackMethod(void const *inputBuffer, void *outputBuffer, unsigned long framesPerBuffer, PaStreamCallbackTimeInfo const *timeInfo, PaStreamCallbackFlags statusFlags) {
         float *out = static_cast<float *>(outputBuffer);
@@ -132,7 +157,9 @@ private:
                 }
 
                 // Get current frame
-                _currentFrame.emplace(_decoder.getFrameAtIndex(_inputStream, _currentFrameIndex));
+                _currentFrame.emplace(_decoder.getFrameAtIndex(_inputStream, _currentFrameIndex, [this](auto const &error) {
+                    return processError(error);
+                }));
 
                 // Get number of channels
                 _currentFrameNumberOfChannels = (*_currentFrame).getNumberOfChannels();
@@ -192,7 +219,7 @@ private:
 };
 
 int main(void) {
-    std::ifstream mp3Stream("Mono_cbr2.mp3", std::ios::binary);
+    std::ifstream mp3Stream(/*"Mono_cbr2.mp3"*/"e5.mp3", std::ios::binary);
 
     MP3::Decoder mp3Decoder(0xFE, 0xFA);
 

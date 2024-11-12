@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <utility>
 #include "Decoder.hpp"
-#include "Helper.hpp"
 #include "Frame/Data/Header.hpp"
 
 //TODO: voir si avoir une structure pour toutes les erreurs rencontrées pour les avoir dans des flags qu'on puisse lire et meme peut etre avoir une structure avec des flags masks pour qu'on puisse definir si telle erreur est critique et doit arreter la lecture ou non, a voir si ca ou simple throw ou simple code erreur a retourner
@@ -93,53 +92,10 @@ namespace MP3 {
         return samplingRates;
     }
 
-    Frame::Frame Decoder::getFrameAtIndex(std::istream &inputStream, unsigned int const frameIndex) {
-        // Get frame header at frameIndex
-        auto const frameHeader = tryToGetFrameHeaderAtIndex(inputStream, frameIndex);
+    bool Decoder::getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation, std::vector<uint8_t> &frameData) {
+        bool result = true;
 
-        // If no frame header, error
-        if (frameHeader.has_value() == false) {
-            throw FrameNotFound(*this, frameIndex);//TODO: a voir
-        }
-
-        // Get stored CRC if needed
-        auto crcStored = getCRCIfExist(inputStream, (*frameHeader));
-
-        // Get frame side information data
-        auto const frameSideInformationData = Helper::getDataFromStream(inputStream, (*frameHeader).getSideInformationSize());
-
-        // Create frame side informations
-        Frame::SideInformation const frameSideInformation((*frameHeader), frameSideInformationData);
-
-        // Get frame data from bit reservoir
-        auto const frameData = getFrameDataFromBitReservoir(inputStream, frameIndex, frameSideInformation);
-
-        // If no frame data, error
-        if (frameData.has_value() == false) {
-            throw std::exception();//TODO: changer, passer le frameHeaderData, le frameSideInformationData, le crc ?
-        }
-
-        // Get frame ancillary data size in bits
-        unsigned int const frameAncillaryDataSizeInBits = 0; //TODO: changer, attention dans le cas ou toutes les données d'une frame sont dans la frame précédente
-
-        // Check CRC if needed
-        if ((*frameHeader).isCRCProtected() == true) {
-            auto crcCalculated = calculateCRC((*frameHeader).getData(), frameSideInformationData);
-
-            // Check CRC
-            if (crcStored != crcCalculated) {
-                //throw FrameCRCIncorrect(*this, (*frameHeader).getData(), frameSideInformationData, (*frameData), crcStored, crcCalculated);//TODO: a voir
-                throw std::exception();//TODO: changer
-            }
-        }
-
-        // Create frame
-        return Frame::Frame((*frameHeader), frameSideInformation, frameAncillaryDataSizeInBits, (*frameData), _framesBlocksSubbandsOverlappingValues, _framesShiftedAndMatrixedSubbandsValues);
-    }
-
-    std::optional<std::vector<uint8_t>> Decoder::getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation) {
-        // Get frame data
-        std::vector<uint8_t> frameData((frameSideInformation.getMainDataSizeInBits() / 8) + (((frameSideInformation.getMainDataSizeInBits() % 8) != 0) ? 1 : 0), 0);
+        // Calculate current bit reservoir frame index
         unsigned int bitReservoirCurrentFrameIndex = frameIndex + ((frameSideInformation.getMainDataBegin() == 0) ? 1 : 0);
 
         // Loop to find first frame to read
@@ -149,7 +105,8 @@ namespace MP3 {
         for (;;) {
             // If first frame and we don't have all data, error
             if (bitReservoirCurrentFrameIndex == 0) {
-                return {};//TODO: a la place de quitter avec une erreur sans rien lire, peut etre lire la partie qu'on sait et laisser des 0 au debut sur tout ce qu'on n'a pas su lire mais quand meme notifier l'erreur pour qu'on puisse thrower dans la methode appelante tout en ayant les données dispo pour l'exception
+                result = false;
+                return {};//TODO: a la place de quitter avec une erreur sans rien lire, lire la partie qu'on sait et laisser des 0 au debut sur tout ce qu'on n'a pas su lire mais quand meme notifier l'erreur pour qu'on puisse thrower dans la methode appelante tout en ayant les données dispo pour l'exception
             }
 
             // Go to previous frame
@@ -184,7 +141,7 @@ namespace MP3 {
             bitReservoirCurrentFrameHeader = tryToGetFrameHeaderAtIndex(inputStream, bitReservoirCurrentFrameIndex);
         }
 
-        return frameData;
+        return result;
     }
 
     uint16_t Decoder::getCRCIfExist(std::istream &inputStream, Frame::Header const &frameHeader) {

@@ -20,6 +20,7 @@ namespace MP3::Helper {
     template <typename TValue, TValue Polynomial, TValue InitialValue>
     TValue calculateCRC(std::vector<uint8_t> const &data);
 
+
     #include "Helper_s.hpp"
 
 }

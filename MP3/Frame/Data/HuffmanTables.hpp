@@ -24,6 +24,7 @@ namespace MP3::Frame::Data {
     struct BigValuesData {
         BigValuesTable const &table;
         unsigned int linbits;
+        unsigned int maxEntryLength;
     };
 
     using Count1Table = std::unordered_map<unsigned int, QuantizedValueQuadruple>;
@@ -47,6 +48,8 @@ namespace MP3::Frame::Data {
         { 0b1000011, { 1, 1, 1, 0 } },
         { 0b1000001, { 1, 1, 1, 1 } }
     };
+
+    unsigned int const count1TableAMaxEntryLength = 6;
 
     // Count1Table B is just an inversion of all 4 bits, so xor 0xF
 
@@ -1479,38 +1482,38 @@ namespace MP3::Frame::Data {
 
     // Extra braces due to std::array, see https://stackoverflow.com/questions/62252076/c-array-too-many-initializers
     std::array<BigValuesData, 32> const bigValuesData = {{
-        { {}, 0 },
-        { bigValuesTable1, 0 },
-        { bigValuesTable2, 0 },
-        { bigValuesTable3, 0 },
-        { {}, 0 },
-        { bigValuesTable5, 0 },
-        { bigValuesTable6, 0 },
-        { bigValuesTable7, 0 },
-        { bigValuesTable8, 0 },
-        { bigValuesTable9, 0 },
-        { bigValuesTable10, 0 },
-        { bigValuesTable11, 0 },
-        { bigValuesTable12, 0 },
-        { bigValuesTable13, 0 },
-        { {}, 0 },
-        { bigValuesTable15, 0 },
-        { bigValuesTable16To23, 1 },
-        { bigValuesTable16To23, 2 },
-        { bigValuesTable16To23, 3 },
-        { bigValuesTable16To23, 4 },
-        { bigValuesTable16To23, 6 },
-        { bigValuesTable16To23, 8 },
-        { bigValuesTable16To23, 10 },
-        { bigValuesTable16To23, 13 },
-        { bigValuesTable24To31, 4 },
-        { bigValuesTable24To31, 5 },
-        { bigValuesTable24To31, 6 },
-        { bigValuesTable24To31, 7 },
-        { bigValuesTable24To31, 8 },
-        { bigValuesTable24To31, 9 },
-        { bigValuesTable24To31, 11 },
-        { bigValuesTable24To31, 13 }
+        { {}, 0, 0 },
+        { bigValuesTable1, 0, 3 },
+        { bigValuesTable2, 0, 6 },
+        { bigValuesTable3, 0, 6 },
+        { {}, 0, 0 },
+        { bigValuesTable5, 0, 8 },
+        { bigValuesTable6, 0, 7 },
+        { bigValuesTable7, 0, 10 },
+        { bigValuesTable8, 0, 11 },
+        { bigValuesTable9, 0, 9 },
+        { bigValuesTable10, 0, 11 },
+        { bigValuesTable11, 0, 11 },
+        { bigValuesTable12, 0, 10 },
+        { bigValuesTable13, 0, 19 },
+        { {}, 0, 0 },
+        { bigValuesTable15, 0, 13 },
+        { bigValuesTable16To23, 1, 17 },//TODO: par apres pour eviter de copier la taille dans toutes les entrées alors que c'est la meme table, plutot mettre la taille dans la table directement
+        { bigValuesTable16To23, 2, 17 },
+        { bigValuesTable16To23, 3, 17 },
+        { bigValuesTable16To23, 4, 17 },
+        { bigValuesTable16To23, 6, 17 },
+        { bigValuesTable16To23, 8, 17 },
+        { bigValuesTable16To23, 10, 17 },
+        { bigValuesTable16To23, 13, 17 },
+        { bigValuesTable24To31, 4, 12 },
+        { bigValuesTable24To31, 5, 12 },
+        { bigValuesTable24To31, 6, 12 },
+        { bigValuesTable24To31, 7, 12 },
+        { bigValuesTable24To31, 8, 12 },
+        { bigValuesTable24To31, 9, 12 },
+        { bigValuesTable24To31, 11, 12 },
+        { bigValuesTable24To31, 13, 12 }
     }};
 
 }
