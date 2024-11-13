@@ -15,7 +15,7 @@ struct PortAudio {//TODO:renommer
         auto const bitrates = _decoder.getBitrates(_inputStream);
         auto const samplingRates = _decoder.getSamplingRates(_inputStream);
 
-        std::cout << "Is valid MP3 = " << (_decoder.isValidFormat(_inputStream, 3) ? "YES" : "NO") << "\n";
+        //std::cout << "Is valid MP3 = " << (_decoder.isValidFormat(_inputStream, 3) ? "YES" : "NO") << "\n";
         std::cout << "Number of frames = " << _numberOfFrames << "\n";
         std::cout << "Is VBR : " << ((bitrates.size() > 1) ? "YES" : "NO") << "\n";
         std::cout << "Has multiple sampling rates : " << ((samplingRates.size() > 1) ? "YES" : "NO") << "\n";
@@ -152,9 +152,9 @@ private:
             // Get a new frame if necessary
             if (_currentPositionInFrame == 0) {
                 // Check if stream is good
-                if (_inputStream.good() == false) {
-                    return paAbort;
-                }
+                //if (_inputStream.good() == false) {
+                //    return paAbort;
+                //}
 
                 // Get current frame
                 _currentFrame.emplace(_decoder.getFrameAtIndex(_inputStream, _currentFrameIndex, [this](auto const &error) {
@@ -221,7 +221,7 @@ private:
 int main(void) {
     std::ifstream mp3Stream(/*"Mono_cbr2.mp3"*/"e5.mp3", std::ios::binary);
 
-    MP3::Decoder mp3Decoder(0xFE, 0xFA);
+    MP3::Decoder mp3Decoder(mp3Stream, 0xFE, 0xFA, 3);
 
     PortAudio portAudio(mp3Decoder, mp3Stream);
 

@@ -6,6 +6,8 @@
 #include <vector>
 #include <variant>
 #include "Header.hpp"
+#include "../Helper.hpp"
+#include "Data/SideInformation.hpp"
 
 
 namespace MP3::Frame {
@@ -45,20 +47,22 @@ namespace MP3::Frame {
 
     struct SideInformation {
 
-        SideInformation(Header const &header, std::vector<uint8_t> const &data);
+        template <class TFunction>
+        SideInformation(Header const &header, std::vector<uint8_t> const &data, TFunction &&errorFunction);
 
-        std::vector<uint8_t> const &getData() const;
+        std::vector<uint8_t> const &getData() const;//TODO: enlever et aussi le membre _data ? (et si on veut rester consistent et enlever aussi dans Header, il faudra refaire la methode qui renvoie un std pair avec Header + HeaderData)
         unsigned int getMainDataBegin() const;
         unsigned int getMainDataSizeInBits() const;
         unsigned int getPrivateBits() const;
         bool getScaleFactorShare(unsigned int const channelIndex, unsigned int const scaleFactorShareIndex) const;
         SideInformationGranule const &getGranule(unsigned int const granuleIndex, unsigned int const channelIndex) const;
 
-        void verify() const;
-
     private:
-        void extract();
-        SideInformationGranule extractGranule(unsigned int &dataBitIndex);
+        template <class TFunction>
+        void extract(TFunction &&errorFunction);
+
+        template <class TFunction>
+        SideInformationGranule extractGranule(unsigned int &dataBitIndex, TFunction &&errorFunction);
 
         std::vector<uint8_t> _data;
         Header const &_header;
@@ -67,6 +71,9 @@ namespace MP3::Frame {
         std::vector<bool> _scaleFactorShare;
         std::vector<SideInformationGranule> _granules;
     };
+
+    
+    #include "SideInformation_s.hpp"
 
 }
 

@@ -4,12 +4,6 @@
 
 template <class TFunction>
 Frame::Frame(Header const &header, SideInformation const &sideInformation, unsigned int const ancillaryDataSizeInBits, std::vector<uint8_t> const &data, std::array<std::array<float, 576>, 2> &blocksSubbandsOverlappingValues, std::array<std::array<float, 1024>, 2> &shiftedAndMatrixedSubbandsValues, TFunction &&errorFunction) : _header(header), _sideInformation(sideInformation), _data(data), _dataBitIndex(0), _blocksSubbandsOverlappingValues(blocksSubbandsOverlappingValues), _shiftedAndMatrixedSubbandsValues(shiftedAndMatrixedSubbandsValues) {
-    // Verify header
-    _header.verify();
-
-    // Verify side information
-    _sideInformation.verify();
-    
     // Resize vectors
     for (unsigned int index = 0; index < 2; ++index) {
         // Resize scaleFactors vector (variable number of channels)
@@ -26,7 +20,7 @@ Frame::Frame(Header const &header, SideInformation const &sideInformation, unsig
     _pcmValues.resize(_header.getNumberOfChannels());
 
     // Extract main data
-    extractMainData(errorFunction);
+    extractMainData(std::forward<TFunction>(errorFunction));
 }
 
 template <class TFunction>
@@ -42,7 +36,7 @@ void Frame::extractMainData(TFunction &&errorFunction) {
             extractScaleFactors(granuleIndex, channelIndex);
 
             // Extract frequency line values
-            extractFrequencyLineValues(granuleIndex, channelIndex, granuleStartDataBitIndex, errorFunction);
+            extractFrequencyLineValues(granuleIndex, channelIndex, granuleStartDataBitIndex, std::forward<TFunction>(errorFunction));
 
             // Requantize frequency line values
             requantizeFrequencyLineValues(granuleIndex, channelIndex);

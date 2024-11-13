@@ -49,8 +49,6 @@ namespace MP3::Frame {
         bool isCopyrighted() const;
         bool isOriginal() const;
 
-        void verify() const;
-
     private:
         void decode();//TODO: mettre un nom qui est du meme genre que dans SideInformation et Frame
 

@@ -18,6 +18,16 @@ namespace MP3::Frame {
             return false;
         }
 
+        // Bitrate index can't be 0 or 15 TODO: voir pour 0 car c'est le mode free
+        if (((data[2] & 0xF0) == 0x0) || ((data[2] & 0xF0) == 0xF0)) {
+            return false;
+        }
+
+        // Sampling rate index can't be 3 (reserved)
+        if ((data[2] & 0x0C) == 0x0C) {
+            return false;
+        }
+
         // Header is valid
         return true;
     }
@@ -42,7 +52,7 @@ namespace MP3::Frame {
 
     unsigned int Header::getFrameLength() const {
         if (Data::samplingRates[_samplingRateIndex] == 0) {
-            return 0;
+            return 0;//TODO: probleme car on ne va pas avancer la tete de lecture quand on recherchera la prochaine frame
         }
 
         return ((144000 * _bitrate) / Data::samplingRates[_samplingRateIndex]) + ((_isPadded) ? 1 : 0);
@@ -109,20 +119,6 @@ namespace MP3::Frame {
         return _isOriginal;
     }
 
-    void Header::verify() const {
-        // Bitrate index can't be 0 or 15 (value 0 or -1 in the table) TODO: voir pour 0 car c'est le mode free
-        if ((_bitrate == 0) || (_bitrate == -1)) {
-            throw std::exception();//TODO: changer
-        }
-
-        // Sampling rate index can't be 3 (reserved)
-        if (_samplingRateIndex == 3) {
-            throw std::exception();//TODO: changer
-        }
-
-        // TODO: est ce une erreur d'avoir ms stereo ou intensity stereo set alors qu'on est pas en joint stereo ou faut il juste ignorer ?
-    }
-
     void Header::decode() {
         unsigned int dataBitIndex = 15;//TODO: pour tester on a mis 14 et 16 et on est dans une boucle infinie ? a verifier car si fichier mal formé on peut bloquer ?
 
@@ -130,7 +126,7 @@ namespace MP3::Frame {
         _isCRCProtected = Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 1) == 0x0;
 
         // Set bitrate
-        _bitrate = Data::bitrates[Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 4)];
+        _bitrate = Data::bitrates[Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 4)];//TODO: voir si sauver bitrate ou bitrateIndex pour rester consistent avec samplingrateindex
 
         // Set sampling rate index
         _samplingRateIndex = Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 2);
@@ -147,6 +143,8 @@ namespace MP3::Frame {
         // Set MS Stereo and Intensity Stereo
         _isMSStereo = Helper::getBitsAtIndex<bool>(_data, dataBitIndex, 1);
         _isIntensityStereo = Helper::getBitsAtIndex<bool>(_data, dataBitIndex, 1);
+
+        // TODO: est ce une erreur d'avoir ms stereo ou intensity stereo set alors qu'on est pas en joint stereo ou faut il juste ignorer ?
 
         // Set copyright
         _isCopyrighted = Helper::getBitsAtIndex<bool>(_data, dataBitIndex, 1);

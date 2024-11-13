@@ -28,7 +28,7 @@ void Decoder::browseFramesHeader(std::istream &inputStream, TFunction &&browseFu
         }
 
         // Pass frame size bytes in stream (minus header size)
-        inputStream.seekg(header.getFrameLength() - headerData.size(), std::ios_base::cur);
+        inputStream.seekg(header.getFrameLength() - headerData.size(), std::ios::cur);
     }
 }*/
 
@@ -53,10 +53,6 @@ void Decoder::browseFramesHeader(std::istream &inputStream, TFunction &&browseFu
 
         // Increment frameIndex
         ++frameIndex;
-        auto s = inputStream.tellg();
-        std::cout << frameIndex << ", " << s << "\n";
-        if (frameIndex > 12)
-        std::cout << "\n";
     }
 }
 
@@ -90,7 +86,7 @@ Frame::Frame Decoder::getFrameAtIndex(std::istream &inputStream, unsigned int co
     }
 
     // Create frame side informations
-    Frame::SideInformation const frameSideInformation((*frameHeader), frameSideInformationData);
+    Frame::SideInformation const frameSideInformation((*frameHeader), frameSideInformationData, std::forward<TFunction>(errorFunction));
 
     // Get frame data from bit reservoir
     std::vector<uint8_t> frameData((frameSideInformation.getMainDataSizeInBits() / 8) + (((frameSideInformation.getMainDataSizeInBits() % 8) != 0) ? 1 : 0), 0);

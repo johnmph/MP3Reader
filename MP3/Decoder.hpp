@@ -9,7 +9,7 @@
 #include "Helper.hpp"
 #include "Frame/Header.hpp"
 #include "Frame/Frame.hpp"
-#include <iostream>//TODO: a retirer
+
 
 namespace MP3 {
     
@@ -19,12 +19,12 @@ namespace MP3 {
         // TODO: creer des constantes pour le versionMask et versionValue
 
         // TODO: avoir un constructor avec plusieurs parametres (ou une struct Configuration) et avoir par exemple le nombre de frames a lire pour etre certain que c'est un bon fichier MP3
-        Decoder(uint8_t const versionMask, uint8_t const versionValue);
+        Decoder(std::istream &inputStream, uint8_t const versionMask, uint8_t const versionValue, unsigned int const numberOfFramesForValidFormat);
 
         template <class TFunction>
         void browseFramesHeader(std::istream &inputStream, TFunction &&browseFunc);
 
-        bool isValidFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat);//TODO: (dans le cas ou on passe le stream en move avec le template parameter sur le type de stream) a mettre en static et a appeler dans le constructor et faire une exception si retourne false dans le constructor (comme dans la classe Header)
+        //bool isValidFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat);//TODO: (dans le cas ou on passe le stream en move avec le template parameter sur le type de stream) a mettre en static et a appeler dans le constructor et faire une exception si retourne false dans le constructor (comme dans la classe Header)
         unsigned int getNumberOfFrames(std::istream &inputStream);
         std::unordered_set<unsigned int> getBitrates(std::istream &inputStream);    // TODO: lazy creation et donc avoir un membre _bitrates et pareil pour la methode en dessous
         std::unordered_set<unsigned int> getSamplingRates(std::istream &inputStream);
@@ -45,6 +45,7 @@ namespace MP3 {
             unsigned int positionInBytes;
         };*/
 
+        bool checkFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat);
         bool getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation, std::vector<uint8_t> &frameData);
         uint16_t getCRCIfExist(std::istream &inputStream, Frame::Header const &frameHeader);
         uint16_t calculateCRC(std::array<uint8_t, 4> const &headerData, std::vector<uint8_t> const &sideInformationData);
