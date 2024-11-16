@@ -11,6 +11,9 @@ namespace MP3::Helper {
 
     std::vector<uint8_t> getDataFromStream(std::istream &inputStream, unsigned int size);
 
+    template <typename TValue>
+    TValue revertEndianness(TValue value);
+    
     template <typename TValue, typename TData>
     TValue getBitsAtIndex(TData const &data, unsigned int &index, unsigned int size);
     

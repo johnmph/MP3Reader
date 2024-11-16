@@ -98,28 +98,20 @@ namespace MP3::Frame {
 
     namespace Error {
 
-        struct Exception : std::exception {
-            Exception(Frame &frame) :_frame(frame) {}
+        struct FrameException : std::exception {
+            FrameException(Frame &frame);
 
         private:
             Frame &_frame;//TODO: faire attention avec cette reference car une exception dans le constructor invalide cette reference et donc soit separer error et exception soit ne pas sauver une reference sur frame ici !!!
         };
 
         template <typename TValue>
-        struct HuffmanCodeNotFound : Exception {
-            HuffmanCodeNotFound(Frame &frame, unsigned int huffmanCodedValue, TValue &huffmanDecodedValue, unsigned int frequencyLineIndex) : Exception(frame), _huffmanCodedValue(huffmanCodedValue), _huffmanDecodedValue(huffmanDecodedValue), _frequencyLineIndex(frequencyLineIndex) {}
+        struct HuffmanCodeNotFound : FrameException {
+            HuffmanCodeNotFound(Frame &frame, unsigned int huffmanCodedValue, TValue &huffmanDecodedValue, unsigned int frequencyLineIndex);
 
-            unsigned int getHuffmanCodedValue() const {
-                return _huffmanCodedValue;
-            }
-
-            TValue &getHuffmanDecodedValue() const {
-                return _huffmanDecodedValue;
-            }
-
-            unsigned int getFrequencyLineIndex() const {
-                return _frequencyLineIndex;
-            }
+            unsigned int getHuffmanCodedValue() const;
+            TValue &getHuffmanDecodedValue() const;
+            unsigned int getFrequencyLineIndex() const;
 
         private:
             unsigned int const _huffmanCodedValue;

@@ -42,7 +42,9 @@ void SideInformation::extract(TFunction &&errorFunction) {
 
         // In MS Stereo both channels must have the same block type
         if ((_header.getChannelMode() == ChannelMode::JointStereo) && (_header.isMSStereo() == true) && (_granules[(granuleIndex * 2) + 0].blockType != _granules[(granuleIndex * 2) + 1].blockType)) {//TODO: voir pour la condition si on change isMSStereo pour tester aussi JointStereo alors plus besoin de la 1ere condition
-            throw std::exception();//TODO: changer
+            if (errorFunction(Error::MSStereoDifferentBlockType(*this, _granules[(granuleIndex * 2) + 0].blockType, _granules[(granuleIndex * 2) + 1].blockType)) == false) {
+                throw Error::MSStereoDifferentBlockType(*this, _granules[(granuleIndex * 2) + 0].blockType, _granules[(granuleIndex * 2) + 1].blockType);
+            }
         }
     }
 }
@@ -79,7 +81,9 @@ SideInformationGranule SideInformation::extractGranule(unsigned int &dataBitInde
 
         // Block type can't be 0 if window switching flag is set
         if (sideInformationGranule.blockType == BlockType::Normal) {
-            throw std::exception();//TODO: changer
+            if (errorFunction(Error::WindowSwitchingFlagWithNormalBlock(*this, sideInformationGranule.blockType)) == false) {
+                throw Error::WindowSwitchingFlagWithNormalBlock(*this, sideInformationGranule.blockType);
+            }
         }
 
         // Get mixedBlockFlag
@@ -91,7 +95,9 @@ SideInformationGranule SideInformation::extractGranule(unsigned int &dataBitInde
 
             // Table 4 and table 14 doesn't exist
             if ((sideInformationGranule.tableSelect[i] == 4) || (sideInformationGranule.tableSelect[i] == 14)) {
-                throw std::exception();//TODO: changer
+                if (errorFunction(Error::InvalidHuffmanTable(*this, i, sideInformationGranule.tableSelect[i])) == false) {
+                    throw Error::InvalidHuffmanTable(*this, i, sideInformationGranule.tableSelect[i]);
+                }
             }
         }
 
@@ -116,7 +122,9 @@ SideInformationGranule SideInformation::extractGranule(unsigned int &dataBitInde
 
             // Table 4 and table 14 doesn't exist
             if ((sideInformationGranule.tableSelect[i] == 4) || (sideInformationGranule.tableSelect[i] == 14)) {
-                throw std::exception();//TODO: changer
+                if (errorFunction(Error::InvalidHuffmanTable(*this, i, sideInformationGranule.tableSelect[i])) == false) {
+                    throw Error::InvalidHuffmanTable(*this, i, sideInformationGranule.tableSelect[i]);
+                }
             }
         }
 

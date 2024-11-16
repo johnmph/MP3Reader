@@ -72,6 +72,48 @@ namespace MP3::Frame {
         std::vector<SideInformationGranule> _granules;
     };
 
+    namespace Error {
+
+        struct SideInformationException : std::exception {
+            SideInformationException(SideInformation &sideInformation);
+
+        private:
+            SideInformation &_sideInformation;//TODO: faire attention avec cette reference car une exception dans le constructor invalide cette reference et donc soit separer error et exception soit ne pas sauver une reference sur frame ici !!!
+        };
+
+        struct MSStereoDifferentBlockType : SideInformationException {
+            MSStereoDifferentBlockType(SideInformation &sideInformation, BlockType &blockTypeGranuleLeft, BlockType &blockTypeGranuleRight);
+
+            BlockType &getBlockTypeGranuleLeft() const;
+            BlockType &getBlockTypeGranuleRight() const;
+
+        private:
+            BlockType &_blockTypeGranuleLeft;//TODO: faire attention avec cette reference car une exception dans le constructor invalide cette reference, soit la retirer pour les exceptions soit faire comme dans frame avec une variable temp
+            BlockType &_blockTypeGranuleRight;//TODO: faire attention avec cette reference car une exception dans le constructor invalide cette reference, soit la retirer pour les exceptions soit faire comme dans frame avec une variable temp
+        };
+
+        struct WindowSwitchingFlagWithNormalBlock : SideInformationException {
+            WindowSwitchingFlagWithNormalBlock(SideInformation &sideInformation, BlockType &blockType);
+
+            BlockType &getBlockType() const;
+
+        private:
+            BlockType &_blockType;//TODO: faire attention avec cette reference car une exception dans le constructor invalide cette reference, soit la retirer pour les exceptions soit faire comme dans frame avec une variable temp
+        };
+
+        struct InvalidHuffmanTable : SideInformationException {
+            InvalidHuffmanTable(SideInformation &sideInformation, unsigned int tableIndex, unsigned int &table);
+
+            unsigned int getTableIndex() const;
+            unsigned int &getTable() const;
+
+        private:
+            unsigned int const _tableIndex;
+            unsigned int &_table;//TODO: faire attention avec cette reference car une exception dans le constructor invalide cette reference, soit la retirer pour les exceptions soit faire comme dans frame avec une variable temp
+        };
+
+    }
+
     
     #include "SideInformation_s.hpp"
 

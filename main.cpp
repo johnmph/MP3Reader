@@ -114,6 +114,7 @@ struct PortAudio {//TODO:renommer
     }
 
 private:
+
     bool processError(MP3::Error::FrameCRCIncorrect const &frameCRCIncorrect) {
         //TODO: mettre des std cout pour verifier mais il faut mettre les getters avant dans les classes d'error
         std::cout << "Error : FrameCRCIncorrect (index = " << frameCRCIncorrect.getFrameIndex() << ", crc stored = " << frameCRCIncorrect.getCRCStored() << ", crc calculated = " << frameCRCIncorrect.getCRCCalculated() << ")\n";
@@ -137,6 +138,27 @@ private:
         std::cout << "Error : HuffmanCodeNotFound (frequency line index = " << huffmanCodeNotFound.getFrequencyLineIndex() << ", huffman coded value = " << huffmanCodeNotFound.getHuffmanCodedValue() << ", huffman decoded value = " << huffmanCodeNotFound.getHuffmanDecodedValue().x << ", " << huffmanCodeNotFound.getHuffmanDecodedValue().y << ", " << huffmanCodeNotFound.getHuffmanDecodedValue().v << ", " << huffmanCodeNotFound.getHuffmanDecodedValue().w << ")\n";
 
         return false;
+    }
+
+    bool processError(MP3::Frame::Error::MSStereoDifferentBlockType const &msStereoDifferentBlockType) {
+        //TODO: mettre des std cout pour verifier mais il faut mettre les getters avant dans les classes d'error
+        std::cout << "Error : MSStereoDifferentBlockType (granule left block type = " << static_cast<unsigned int>(msStereoDifferentBlockType.getBlockTypeGranuleLeft()) << ", granule right block type = " << static_cast<unsigned int>(msStereoDifferentBlockType.getBlockTypeGranuleRight()) << ")\n";
+
+        return true;
+    }
+
+    bool processError(MP3::Frame::Error::WindowSwitchingFlagWithNormalBlock const &windowSwitchingFlagWithNormalBlock) {
+        //TODO: mettre des std cout pour verifier mais il faut mettre les getters avant dans les classes d'error
+        std::cout << "Error : WindowSwitchingFlagWithNormalBlock (block type = " << static_cast<unsigned int>(windowSwitchingFlagWithNormalBlock.getBlockType()) << ")\n";
+
+        return true;
+    }
+
+    bool processError(MP3::Frame::Error::InvalidHuffmanTable const &invalidHuffmanTable) {
+        //TODO: mettre des std cout pour verifier mais il faut mettre les getters avant dans les classes d'error
+        std::cout << "Error : InvalidHuffmanTable (Table index = " << invalidHuffmanTable.getTableIndex() << ", Table = " << invalidHuffmanTable.getTable() << ")\n";
+
+        return true;
     }
 
     /* The instance callback, where we have access to every method/variable in object of class Sine */
@@ -219,7 +241,7 @@ private:
 };
 
 int main(void) {
-    std::ifstream mp3Stream(/*"Mono_cbr2.mp3"*/"e5.mp3", std::ios::binary);
+    std::ifstream mp3Stream(/*"Mono_cbr2.mp3"*/"e2.mp3", std::ios::binary);
 
     MP3::Decoder mp3Decoder(mp3Stream, 0xFE, 0xFA, 3);
 

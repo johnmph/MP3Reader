@@ -39,5 +39,38 @@ namespace MP3::Frame {
         //TODO: assert sur channelIndex ?
         return _granules[(granuleIndex * _header.getNumberOfChannels()) + channelIndex];
     }
+
+
+    Error::SideInformationException::SideInformationException(SideInformation &sideInformation) :_sideInformation(sideInformation) {
+    }
+
+    Error::MSStereoDifferentBlockType::MSStereoDifferentBlockType(SideInformation &sideInformation, BlockType &blockTypeGranuleLeft, BlockType &blockTypeGranuleRight) : SideInformationException(sideInformation), _blockTypeGranuleLeft(blockTypeGranuleLeft), _blockTypeGranuleRight(blockTypeGranuleRight) {
+    }
+
+    BlockType &Error::MSStereoDifferentBlockType::getBlockTypeGranuleLeft() const {
+        return _blockTypeGranuleLeft;
+    }
+
+    BlockType &Error::MSStereoDifferentBlockType::getBlockTypeGranuleRight() const {
+        return _blockTypeGranuleRight;
+    }
+    
+    Error::WindowSwitchingFlagWithNormalBlock::WindowSwitchingFlagWithNormalBlock(SideInformation &sideInformation, BlockType &blockType) : SideInformationException(sideInformation), _blockType(blockType) {
+    }
+
+    BlockType &Error::WindowSwitchingFlagWithNormalBlock::getBlockType() const {
+        return _blockType;
+    }
+
+    Error::InvalidHuffmanTable::InvalidHuffmanTable(SideInformation &sideInformation, unsigned int tableIndex, unsigned int &table) : SideInformationException(sideInformation), _tableIndex(tableIndex), _table(table) {
+    }
+
+    unsigned int Error::InvalidHuffmanTable::getTableIndex() const {
+        return _tableIndex;
+    }
+
+    unsigned int &Error::InvalidHuffmanTable::getTable() const {
+        return _table;
+    }
     
 }

@@ -557,3 +557,13 @@ build/e5.mp3
 build/e6.mp3
 build/.cmake/api/v1/reply/index-2024-11-11T14-44-06-0944.json
 build/.cmake/api/v1/reply/index-2024-11-13T11-00-43-0920.json
+build/build.ninja
+build/.cmake/api/v1/reply/cache-v2-2cf22e4f4ec3d6d67da7.json
+build/.cmake/api/v1/reply/cmakeFiles-v1-48758f505cc03d7fe6f2.json
+build/.cmake/api/v1/reply/codemodel-v2-a6de5fd14eb8349f2991.json
+build/.cmake/api/v1/reply/index-2024-11-16T18-34-05-0906.json
+build/.cmake/api/v1/reply/target-MP3-Debug-c3e125b1fc9d81881383.json
+build/.cmake/api/v1/reply/target-MP3Reader-Debug-3836744b262420edf8cb.json
+build/.cmake/api/v1/reply/target-portaudio_static-Debug-75cc939da91d55c1e908.json
+build/.cmake/api/v1/reply/target-portaudio-Debug-96db142628bf2f0d4b16.json
+build/CMakeFiles/rules.ninja

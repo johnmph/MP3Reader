@@ -47,11 +47,11 @@ void Frame::extractMainData(TFunction &&errorFunction) {
 
         // Process stereo (need to be done when all channels are decoded)
         processStereo(granuleIndex);
-    }
+    //}//TODO: voir si ok en regroupant les boucles, normalement oui
 
     // What is following can't be done before finishing processStereo, it's why we separated it to another loop
     // Browse granules
-    for (unsigned int granuleIndex = 0; granuleIndex < 2; ++granuleIndex) {
+    //for (unsigned int granuleIndex = 0; granuleIndex < 2; ++granuleIndex) {
         // Browse channels
         for (unsigned int channelIndex = 0; channelIndex < _header.getNumberOfChannels(); ++channelIndex) {
             // Synthesis FilterBank
@@ -195,6 +195,25 @@ unsigned int Frame::getScaleFactorBandIndexForFrequencyLineIndex(TScaleFactorBan
 
     // Not found
     return -1;//TODO: exception normalement
+}
+
+template <typename TValue>
+Error::HuffmanCodeNotFound<TValue>::HuffmanCodeNotFound(Frame &frame, unsigned int huffmanCodedValue, TValue &huffmanDecodedValue, unsigned int frequencyLineIndex) : FrameException(frame), _huffmanCodedValue(huffmanCodedValue), _huffmanDecodedValue(huffmanDecodedValue), _frequencyLineIndex(frequencyLineIndex) {
+}
+
+template <typename TValue>
+unsigned int Error::HuffmanCodeNotFound<TValue>::getHuffmanCodedValue() const {
+    return _huffmanCodedValue;
+}
+
+template <typename TValue>
+TValue &Error::HuffmanCodeNotFound<TValue>::getHuffmanDecodedValue() const {
+    return _huffmanDecodedValue;
+}
+
+template <typename TValue>
+unsigned int Error::HuffmanCodeNotFound<TValue>::getFrequencyLineIndex() const {
+    return _frequencyLineIndex;
 }
 
 #endif /* MP3_FRAME_FRAME_S_HPP */

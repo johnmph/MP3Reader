@@ -63,51 +63,44 @@ namespace MP3 {
 
     namespace Error {
 
-        struct Exception : std::exception {
-            Exception(Decoder &decoder) :_decoder(decoder) {}
+        struct DecoderException : std::exception {
+            DecoderException(Decoder &decoder);
 
         private:
             Decoder &_decoder;
         };
 
-        struct FrameException : Exception {
-            FrameException(Decoder &decoder, unsigned int const frameIndex) : Exception(decoder), _frameIndex(frameIndex) {}
+        struct BadMP3Format : DecoderException {
+            BadMP3Format(Decoder &decoder, std::istream &inputStream);
 
-            unsigned int getFrameIndex() const {
-                return _frameIndex;
-            }
+            std::istream &getInputStream() const;
+
+        private:
+            std::istream &_inputStream;
+        };
+
+        struct FrameDecoderException : DecoderException {
+            FrameDecoderException(Decoder &decoder, unsigned int const frameIndex);
+
+            unsigned int getFrameIndex() const;
 
         private:
             unsigned int const _frameIndex;
         };
 
-        struct FrameNotFound : FrameException {
-            FrameNotFound(Decoder &decoder, unsigned int const frameIndex) : FrameException(decoder, frameIndex) {}
+        struct FrameNotFound : FrameDecoderException {
+            FrameNotFound(Decoder &decoder, unsigned int const frameIndex);
         };
 
-        struct FrameCRCIncorrect : FrameException {
-            FrameCRCIncorrect(Decoder &decoder, unsigned int const frameIndex, uint16_t crcStored, uint16_t crcCalculated, Frame::Header &frameHeader, std::array<uint8_t, Frame::Header::headerSize> const &frameHeaderData, std::vector<uint8_t> &frameSideInformationData) : FrameException(decoder, frameIndex), _crcStored(crcStored), _crcCalculated(crcCalculated), _frameHeaderTemp(frameHeader), _frameHeader(frameHeader), _frameHeaderData(frameHeaderData), _frameSideInformationData(frameSideInformationData) {}
-            FrameCRCIncorrect(Decoder &decoder, unsigned int const frameIndex, uint16_t crcStored, uint16_t crcCalculated, Frame::Header const &frameHeader, std::array<uint8_t, Frame::Header::headerSize> const &frameHeaderData, std::vector<uint8_t> const &frameSideInformationData) : FrameException(decoder, frameIndex), _crcStored(crcStored), _crcCalculated(crcCalculated), _frameHeaderTemp(frameHeader), _frameHeader(_frameHeaderTemp), _frameHeaderData(frameHeaderData), _frameSideInformationDataTemp(frameSideInformationData), _frameSideInformationData(_frameSideInformationDataTemp) {}
+        struct FrameCRCIncorrect : FrameDecoderException {
+            FrameCRCIncorrect(Decoder &decoder, unsigned int const frameIndex, uint16_t crcStored, uint16_t crcCalculated, Frame::Header &frameHeader, std::array<uint8_t, Frame::Header::headerSize> const &frameHeaderData, std::vector<uint8_t> &frameSideInformationData);
+            FrameCRCIncorrect(Decoder &decoder, unsigned int const frameIndex, uint16_t crcStored, uint16_t crcCalculated, Frame::Header const &frameHeader, std::array<uint8_t, Frame::Header::headerSize> const &frameHeaderData, std::vector<uint8_t> const &frameSideInformationData);
 
-            uint16_t getCRCStored() const {
-                return _crcStored;
-            }
-
-            uint16_t getCRCCalculated() const {
-                return _crcCalculated;
-            }
-
-            Frame::Header &getFrameHeader() const {
-                return _frameHeader;
-            }
-
-            std::array<uint8_t, Frame::Header::headerSize> const &getFrameHeaderData() const {
-                return _frameHeaderData;
-            }
-
-            std::vector<uint8_t> &getFrameSideInformationData() const {
-                return _frameSideInformationData;
-            }
+            uint16_t getCRCStored() const;
+            uint16_t getCRCCalculated() const;
+            Frame::Header &getFrameHeader() const;
+            std::array<uint8_t, Frame::Header::headerSize> const &getFrameHeaderData() const;
+            std::vector<uint8_t> &getFrameSideInformationData() const;
 
         private:
             uint16_t const _crcStored;
@@ -119,13 +112,11 @@ namespace MP3 {
             std::vector<uint8_t> &_frameSideInformationData;
         };
 
-        struct FrameNoData : FrameException {
-            FrameNoData(Decoder &decoder, unsigned int const frameIndex, std::vector<uint8_t> &frameData) : FrameException(decoder, frameIndex), _frameData(frameData) {}
-            FrameNoData(Decoder &decoder, unsigned int const frameIndex, std::vector<uint8_t> const &frameData) : FrameException(decoder, frameIndex), _frameDataTemp(frameData), _frameData(_frameDataTemp) {}
+        struct FrameNoData : FrameDecoderException {
+            FrameNoData(Decoder &decoder, unsigned int const frameIndex, std::vector<uint8_t> &frameData);
+            FrameNoData(Decoder &decoder, unsigned int const frameIndex, std::vector<uint8_t> const &frameData);
 
-            std::vector<uint8_t> &getFrameData() const {
-                return _frameData;
-            }
+            std::vector<uint8_t> &getFrameData() const;
 
         private:
             std::vector<uint8_t> _frameDataTemp;

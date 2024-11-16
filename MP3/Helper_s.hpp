@@ -2,6 +2,18 @@
 #define MP3_HELPER_S_HPP
 
 
+template <typename TValue>
+TValue revertEndianness(TValue value) {
+    TValue convertedValue = 0;
+
+    // Browse all bytes of value
+    for (unsigned int byteIndex = 0; byteIndex < sizeof(TValue); ++byteIndex) {
+        convertedValue |= ((value >> (byteIndex * 8)) & 0xFF) << ((sizeof(TValue) - (byteIndex + 1)) * 8);
+    }
+
+    return convertedValue;
+}
+
 template <typename TValue, typename TData>
 TValue getBitsAtIndex(TData const &data, unsigned int &index, unsigned int size) {
     assert(size <= (sizeof(TValue) * 8));

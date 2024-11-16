@@ -37,8 +37,10 @@ namespace MP3::Frame {
         unsigned int getSideInformationSize() const;
         unsigned int getDataSize() const;
         unsigned int getNumberOfChannels() const;
+        unsigned int getBitrateIndex() const;
         unsigned int getBitrate() const;
         unsigned int getSamplingRateIndex() const;
+        unsigned int getSamplingRate() const;
         ChannelMode getChannelMode() const;
         Emphasis getEmphasis() const;
         bool isPadded() const;
@@ -53,7 +55,7 @@ namespace MP3::Frame {
         void decode();//TODO: mettre un nom qui est du meme genre que dans SideInformation et Frame
 
         std::array<uint8_t, headerSize> _data;
-        unsigned int _bitrate;
+        unsigned int _bitrateIndex;
         unsigned int _samplingRateIndex;
         ChannelMode _channelMode;
         Emphasis _emphasis;

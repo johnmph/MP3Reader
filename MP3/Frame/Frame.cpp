@@ -18,7 +18,7 @@ namespace MP3::Frame {
     }
 
     unsigned int Frame::getSamplingRate() const {
-        return Data::samplingRates[_header.getSamplingRateIndex()];
+        return _header.getSamplingRate();
     }
 
     ChannelMode Frame::getChannelMode() const {
@@ -55,7 +55,6 @@ namespace MP3::Frame {
     }
 
     void Frame::extractScaleFactors(unsigned int const granuleIndex, unsigned int const channelIndex) {
-        //TODO: If short windows are switched on, i.e. block-type==2 for one of the granules, then scfsi is always 0 for this frame : voir si c'est certifié par l'encoder ou si c'est ici qu'il faut le mettre a 0
         // Get current granule
         auto const &currentGranule = _sideInformation.getGranule(granuleIndex, channelIndex);
 
@@ -64,6 +63,8 @@ namespace MP3::Frame {
 
         // If we have 3 short windows
         if (currentGranule.blockType == BlockType::ShortWindows3) {
+            unsigned int scaleFactorBandIndexStart = 0;
+
             // If we have mixed block
             if (std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).mixedBlockFlag == true) {
                 // Browse scaleFactor bands 0 to 7 for long window
@@ -71,27 +72,22 @@ namespace MP3::Frame {
                     currentScaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, currentGranule.sLen1);
                 }
 
-                // Browse scaleFactor bands 3 to 11 for short window
-                for (unsigned int scaleFactorBandIndex = 3; scaleFactorBandIndex < 12; ++scaleFactorBandIndex) {
-                    // Browse windows
-                    for (unsigned int windowIndex = 0; windowIndex < 3; ++windowIndex) {
-                        currentScaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
-                    }
-                }
-            } else {
-                // Browse scaleFactor bands 0 to 11 for short window
-                for (unsigned int scaleFactorBandIndex = 0; scaleFactorBandIndex < 12; ++scaleFactorBandIndex) {
-                    // Browse windows
-                    for (unsigned int windowIndex = 0; windowIndex < 3; ++windowIndex) {
-                        currentScaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
-                    }
+                // In mixed block flag, we start short block at 3
+                scaleFactorBandIndexStart = 3;
+            }
+
+            // Browse scaleFactor bands start to 11 for short window
+            for (unsigned int scaleFactorBandIndex = scaleFactorBandIndexStart; scaleFactorBandIndex < 12; ++scaleFactorBandIndex) {
+                // Browse windows
+                for (unsigned int windowIndex = 0; windowIndex < 3; ++windowIndex) {
+                    currentScaleFactors.shortWindow[scaleFactorBandIndex][windowIndex] = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, (scaleFactorBandIndex < 6) ? currentGranule.sLen1 : currentGranule.sLen2);
                 }
             }
         } else {
             // Browse scaleFactor bands 0 to 20 for long window
             for (unsigned int scaleFactorBandIndex = 0; scaleFactorBandIndex < 21; ++scaleFactorBandIndex) {
-                // If we don't share or if we are in first granule
-                if ((_sideInformation.getScaleFactorShare(channelIndex, getScaleFactorShareGroupForScaleFactorBand(scaleFactorBandIndex)) == false) || (granuleIndex == 0)) {
+                // If we are in first granule or if we don't share
+                if ((granuleIndex == 0) || (_sideInformation.getScaleFactorShare(channelIndex, getScaleFactorShareGroupForScaleFactorBand(scaleFactorBandIndex)) == false)) {
                     currentScaleFactors.longWindow[scaleFactorBandIndex] = Helper::getBitsAtIndex<unsigned int>(_data, _dataBitIndex, (scaleFactorBandIndex < 11) ? currentGranule.sLen1 : currentGranule.sLen2);
                 } else {
                     // Share with first granule
@@ -144,32 +140,34 @@ namespace MP3::Frame {
         auto &currentFrequencyLineValues = _frequencyLineValues[granuleIndex][channelIndex];
         auto savedCurrentFrequencyLineValues = currentFrequencyLineValues;
         
-        // Browse frequency lines
-        unsigned int startFrequencyLineForCurrentScaleFactorBand = 0;
-        unsigned int reorderedIndex = 0;
+        unsigned int offsetIndex = 0;
+        unsigned int orderedOffsetIndex = 0;
+        unsigned int orderedSampleIndex = 0;
 
-        for (unsigned int frequencyLineIndex = ((std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).mixedBlockFlag == true) ? 36 : 0); frequencyLineIndex < 576; ++frequencyLineIndex) {//TODO: toutes les references a 576 doivent etre retirées et remplacées par un const et 36 aussi
-            // Get current scaleFactor band index
-            auto const currentScaleFactorBandIndex = getScaleFactorBandIndexForFrequencyLineIndex(Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()], frequencyLineIndex / 3);
+        // Browse scale factor bands
+        for (unsigned int scaleFactorBandIndex = ((std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).mixedBlockFlag == true) ? 3 : 0); scaleFactorBandIndex < 13; ++scaleFactorBandIndex) { //TODO: regarder pour le mixedBlockFlag : et voir si 3 ok
+            // Get current scale factor band frequency line count
+            unsigned int const scaleFactorBandFrequencyLineCount = Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][scaleFactorBandIndex] - ((scaleFactorBandIndex > 0) ? Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][scaleFactorBandIndex - 1] : -1);
 
-            // Get current scaleFactor band frequency line count
-            int const currentScaleFactorBandFrequencyLineCount = Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][currentScaleFactorBandIndex] - ((currentScaleFactorBandIndex > 0) ? Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][currentScaleFactorBandIndex - 1] : -1);
+            // Browse samples
+            for (unsigned int sampleIndex = 0; sampleIndex < scaleFactorBandFrequencyLineCount; ++sampleIndex) {
+                // Browse windows
+                for (unsigned int windowIndex = 0; windowIndex < 3; ++windowIndex) {
+                    // Reorder
+                    currentFrequencyLineValues[orderedOffsetIndex + orderedSampleIndex + (6 * windowIndex)] = savedCurrentFrequencyLineValues[offsetIndex + sampleIndex + (scaleFactorBandFrequencyLineCount * windowIndex)];
+                }
+   
+                // Update ordered sample index
+                ++orderedSampleIndex;
 
-            // Reorder
-            currentFrequencyLineValues[frequencyLineIndex] = savedCurrentFrequencyLineValues[startFrequencyLineForCurrentScaleFactorBand + reorderedIndex];
-
-            // Update reorderedIndex
-            reorderedIndex += currentScaleFactorBandFrequencyLineCount;
-
-            if (reorderedIndex >= (currentScaleFactorBandFrequencyLineCount * 3)) {
-                reorderedIndex -= (currentScaleFactorBandFrequencyLineCount * 3) - 1;
-
-                // The current scale factor band index is over, go to next
-                if (reorderedIndex == currentScaleFactorBandFrequencyLineCount) {
-                    reorderedIndex = 0;
-                    startFrequencyLineForCurrentScaleFactorBand = frequencyLineIndex + 1;
+                if ((orderedSampleIndex % 6) == 0) {
+                    orderedSampleIndex = 0;
+                    orderedOffsetIndex += 18;
                 }
             }
+
+            // Update offset index
+            offsetIndex += scaleFactorBandFrequencyLineCount * 3;
         }
     }
 
@@ -227,6 +225,8 @@ namespace MP3::Frame {
     }
 
     unsigned int Frame::getScaleFactorShareGroupForScaleFactorBand(unsigned int const scaleFactorBand) const {
+        assert(scaleFactorBand < 21);
+
         // Browse all scale factor share groups
         for (unsigned int scaleFactorShareGroupIndex = 1; scaleFactorShareGroupIndex < 5; ++scaleFactorShareGroupIndex) {
             // If scaleFactorBand is in current group
@@ -236,11 +236,13 @@ namespace MP3::Frame {
             }
         }
 
-        // Not found
-        return -1;  // TODO: attention on retourne -1 en unsigned int : thrower une exception normalement ou faire un assert au début de la methode sur scaleFactorBand < 21
+        // Not found, never happen if Data::scaleFactorBandsPerScaleFactorShareGroup has share group from 0 to 20 included
+        return -1;
     }
 
     unsigned int Frame::getBigValuesRegionForFrequencyLineIndex(SideInformationGranule const &sideInformationGranule, unsigned int const frequencyLineIndex) const {
+        assert(_header.getSamplingRateIndex() < 3);//TODO: plutot que de le mettre la, avoir une methode pour recuperer les scale factors bands array par rapport au header getsamplingrateindex et le tester a cet endroit
+
         // If short windows
         if (sideInformationGranule.windowSwitchingFlag == true) {
             // Region 1 always starts at frequency line 36 and take all the remaining because there is no region 2
@@ -248,7 +250,7 @@ namespace MP3::Frame {
         }
 
         // Get scaleFactorBands array for sampling rate
-        auto const &scaleFactorBands = Data::frequencyLinesPerScaleFactorBandLongBlock[_header.getSamplingRateIndex()];//TODO: si samplingRateIndex > 2 thrower une erreur !
+        auto const &scaleFactorBands = Data::frequencyLinesPerScaleFactorBandLongBlock[_header.getSamplingRateIndex()];
 
         // If region 0
         if (frequencyLineIndex <= scaleFactorBands[sideInformationGranule.region0Count]) {
@@ -301,7 +303,7 @@ namespace MP3::Frame {
     }
 
     unsigned int Frame::getCurrentWindowIndexForFrequencyLineIndex(unsigned int const scaleFactorBandIndex, unsigned int const frequencyLineIndex) const {
-        // TODO: assert sur scaleFactorBandIndex < 12
+        assert(scaleFactorBandIndex < 12);//TODO: assert aussi sur frequencyLineIndex ?
 
         // Get currentWindowIndex
         int const currentScaleFactorBandMaxFrequencyLine = Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][scaleFactorBandIndex];
@@ -454,7 +456,7 @@ namespace MP3::Frame {
         auto const &windowingValues = Data::windowingValuesPerBlock[static_cast<unsigned int>(sideInformationGranule.blockType)];//TODO: voir si laisser ainsi avec le cast du enum ou si avoir une methode a part et attention pour les short blocks
 
         // Process windowing
-        for (unsigned int i = 0; i < 36; ++i) {
+        for (unsigned int i = 0; i < 36; ++i) {//TODO: pas bon, je ne peux pas appliquer le meme traitement pour tout si mixedBlockFlag !!!
             subbandValues[i] *= windowingValues[i];
         }
 
@@ -560,6 +562,10 @@ namespace MP3::Frame {
                 }
             }
         }
+    }
+
+
+    Error::FrameException::FrameException(Frame &frame) :_frame(frame) {
     }
 
 }

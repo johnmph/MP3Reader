@@ -9,9 +9,9 @@
 namespace MP3 {
 
     Decoder::Decoder(std::istream &inputStream, uint8_t const versionMask, uint8_t const versionValue, unsigned int const numberOfFramesForValidFormat) : _versionMask(versionMask), _versionValue(versionValue), _framesBlocksSubbandsOverlappingValues({}), _framesShiftedAndMatrixedSubbandsValues({}) {//TODO: voir pour empty initializers, si pas bon, mettre std fill dans le constructor
-        // If format is invalid
+        // Check if format is invalid
         if (checkFormat(inputStream, numberOfFramesForValidFormat) == false) {
-            throw std::exception();//TODO: changer
+            throw Error::BadMP3Format(*this, inputStream);//TODO: attention la reference this sera invalide !!!
         }
     }
 
@@ -48,7 +48,7 @@ namespace MP3 {
 
         browseFramesHeader(inputStream, [&inputStream, &samplingRates](Frame::Header const &frameHeader) {
             // Add current sampling rate
-            samplingRates.insert(Frame::Data::samplingRates[frameHeader.getSamplingRateIndex()]);
+            samplingRates.insert(frameHeader.getSamplingRate());
 
             // Continue
             return true;
@@ -169,7 +169,7 @@ namespace MP3 {
         inputStream.read(reinterpret_cast<char *>(&storedCRC), frameHeader.getCRCSize());
 
         // Convert in little endianness
-        storedCRC = ((storedCRC << 8) & 0xFF00) | (storedCRC >> 8);//TODO: mettre dans une fonction helper invertEndianness (template sur le type)
+        storedCRC = Helper::revertEndianness(storedCRC);
 
         // Return it
         return storedCRC;
@@ -253,4 +253,60 @@ namespace MP3 {
         return {};
     }
 
+    Error::DecoderException::DecoderException(Decoder &decoder) :_decoder(decoder) {
+    }
+
+    Error::BadMP3Format::BadMP3Format(Decoder &decoder, std::istream &inputStream) : DecoderException(decoder), _inputStream(inputStream) {
+    }
+
+    std::istream &Error::BadMP3Format::getInputStream() const {
+        return _inputStream;
+    }
+
+    Error::FrameDecoderException::FrameDecoderException(Decoder &decoder, unsigned int const frameIndex) : DecoderException(decoder), _frameIndex(frameIndex) {
+    }
+
+    unsigned int Error::FrameDecoderException::getFrameIndex() const {
+        return _frameIndex;
+    }
+
+    Error::FrameNotFound::FrameNotFound(Decoder &decoder, unsigned int const frameIndex) : FrameDecoderException(decoder, frameIndex) {
+    }
+
+    Error::FrameCRCIncorrect::FrameCRCIncorrect(Decoder &decoder, unsigned int const frameIndex, uint16_t crcStored, uint16_t crcCalculated, Frame::Header &frameHeader, std::array<uint8_t, Frame::Header::headerSize> const &frameHeaderData, std::vector<uint8_t> &frameSideInformationData) : FrameDecoderException(decoder, frameIndex), _crcStored(crcStored), _crcCalculated(crcCalculated), _frameHeaderTemp(frameHeader), _frameHeader(frameHeader), _frameHeaderData(frameHeaderData), _frameSideInformationData(frameSideInformationData) {
+    }
+
+    Error::FrameCRCIncorrect::FrameCRCIncorrect(Decoder &decoder, unsigned int const frameIndex, uint16_t crcStored, uint16_t crcCalculated, Frame::Header const &frameHeader, std::array<uint8_t, Frame::Header::headerSize> const &frameHeaderData, std::vector<uint8_t> const &frameSideInformationData) : FrameDecoderException(decoder, frameIndex), _crcStored(crcStored), _crcCalculated(crcCalculated), _frameHeaderTemp(frameHeader), _frameHeader(_frameHeaderTemp), _frameHeaderData(frameHeaderData), _frameSideInformationDataTemp(frameSideInformationData), _frameSideInformationData(_frameSideInformationDataTemp) {
+    }
+
+    uint16_t Error::FrameCRCIncorrect::getCRCStored() const {
+        return _crcStored;
+    }
+
+    uint16_t Error::FrameCRCIncorrect::getCRCCalculated() const {
+        return _crcCalculated;
+    }
+
+    Frame::Header &Error::FrameCRCIncorrect::getFrameHeader() const {
+        return _frameHeader;
+    }
+
+    std::array<uint8_t, Frame::Header::headerSize> const &Error::FrameCRCIncorrect::getFrameHeaderData() const {
+        return _frameHeaderData;
+    }
+
+    std::vector<uint8_t> &Error::FrameCRCIncorrect::getFrameSideInformationData() const {
+        return _frameSideInformationData;
+    }
+
+    Error::FrameNoData::FrameNoData(Decoder &decoder, unsigned int const frameIndex, std::vector<uint8_t> &frameData) : FrameDecoderException(decoder, frameIndex), _frameData(frameData) {
+    }
+
+    Error::FrameNoData::FrameNoData(Decoder &decoder, unsigned int const frameIndex, std::vector<uint8_t> const &frameData) : FrameDecoderException(decoder, frameIndex), _frameDataTemp(frameData), _frameData(_frameDataTemp) {
+    }
+
+    std::vector<uint8_t> &Error::FrameNoData::getFrameData() const {
+        return _frameData;
+    }
+    
 }
