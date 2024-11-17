@@ -446,7 +446,8 @@ namespace MP3::Frame {
         for (unsigned int i = 0; i < 36; ++i) { // TODO: toutes les constantes comme 36, 12, ... doivent etre dans des constantes
             // From 18 (6+6+6 in short block) values
             for (unsigned int k = 0; k < halfN; ++k) {
-                subbandValues[i] += frequencyLineValues[(subbandIndex * 18) + ((i / n) * halfN) + k] * /*(((sideInformationGranule.blockType == BlockType::ShortWindows3) && ((std::get<SideInformationGranuleSpecialWindow>(sideInformationGranule.window).mixedBlockFlag == false) || (subbandIndex >= 2))) ? Data::imdctShortBlock[((i % 12) * halfN) + k] : Data::imdctLongBlock[(i * halfN) + k]);/*/std::cos((M_PI / (2.0f * n)) * ((2.0f * i) + 1.0f + halfN) * ((2.0f * k) + 1.0f));
+                subbandValues[i] += frequencyLineValues[(subbandIndex * 18) + ((i / n) * halfN) + k] * (((sideInformationGranule.blockType == BlockType::ShortWindows3) && ((std::get<SideInformationGranuleSpecialWindow>(sideInformationGranule.window).mixedBlockFlag == false) || (subbandIndex >= 2))) ? Data::imdctShortBlock[((i % 12) * halfN) + k] : Data::imdctLongBlock[(i * halfN) + k]);
+                //subbandValues[i] += frequencyLineValues[(subbandIndex * 18) + ((i / n) * halfN) + k] * std::cos((M_PI / (2.0f * n)) * ((2.0f * i) + 1.0f + halfN) * ((2.0f * k) + 1.0f));
             }
         }
     }

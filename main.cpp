@@ -9,7 +9,7 @@
 
 
 struct PortAudio {//TODO:renommer
-    PortAudio(MP3::Decoder &decoder, std::istream &inputStream) : _result(Pa_Initialize()), _stream(nullptr), _decoder(decoder), _inputStream(inputStream), _currentFrameIndex(0), _currentPositionInFrame(0), _isPlaying(false) {
+    PortAudio(MP3::Decoder &decoder, std::istream &inputStream) : _result(Pa_Initialize()), _stream(nullptr), _decoder(decoder), _inputStream(inputStream), _currentFrameIndex(/*1053*/0), _currentPositionInFrame(0), _isPlaying(false) {
         _numberOfFrames = _decoder.getNumberOfFrames(_inputStream);
 
         auto const bitrates = _decoder.getBitrates(_inputStream);
