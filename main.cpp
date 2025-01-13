@@ -9,19 +9,18 @@
 
 
 struct PortAudio {//TODO:renommer
-    PortAudio(MP3::Decoder &decoder, std::istream &inputStream) : _result(Pa_Initialize()), _stream(nullptr), _decoder(decoder), _inputStream(inputStream), _currentFrameIndex(/*1053*/0), _currentPositionInFrame(0), _isPlaying(false) {
-        _numberOfFrames = _decoder.getNumberOfFrames(_inputStream);
+    PortAudio(MP3::Decoder decoder) : _result(Pa_Initialize()), _stream(nullptr), _decoder(std::move(decoder)), _currentFrameIndex(0), _currentPositionInFrame(0), _isPlaying(false) {
+        _numberOfFrames = _decoder.getNumberOfFrames();
 
-        auto const bitrates = _decoder.getBitrates(_inputStream);
-        auto const samplingRates = _decoder.getSamplingRates(_inputStream);
+        auto const &bitrates = _decoder.getBitrates();
+        auto const &samplingRates = _decoder.getSamplingRates();
 
-        //std::cout << "Is valid MP3 = " << (_decoder.isValidFormat(_inputStream, 3) ? "YES" : "NO") << "\n";
         std::cout << "Number of frames = " << _numberOfFrames << "\n";
         std::cout << "Is VBR : " << ((bitrates.size() > 1) ? "YES" : "NO") << "\n";
         std::cout << "Has multiple sampling rates : " << ((samplingRates.size() > 1) ? "YES" : "NO") << "\n";
 
         if (bitrates.size() == 1) {
-            std::cout << "Bitrate = " << *(std::begin(bitrates)) << "\n";//TODO: trouver tous les .begin / .end et remplacer par std::begin, std::end
+            std::cout << "Bitrate = " << *(std::begin(bitrates)) << "\n";
         }
 
         if (samplingRates.size() == 1) {
@@ -179,7 +178,7 @@ private:
                 //}
 
                 // Get current frame
-                _currentFrame.emplace(_decoder.getFrameAtIndex(_inputStream, _currentFrameIndex, [this](auto const &error) {
+                _currentFrame.emplace(_decoder.getFrameAtIndex(_currentFrameIndex, [this](auto const &error) {
                     return processError(error);
                 }));
 
@@ -196,6 +195,7 @@ private:
 
             // Check position in frame
             ++_currentPositionInFrame;
+            //_currentPositionInFrame += 2;//TODO: jouer a la vitesse x2
 
             if (_currentPositionInFrame > 1151) {
                 _currentPositionInFrame = 0;
@@ -229,8 +229,7 @@ private:
 
     PaError _result;
     PaStream *_stream;
-    MP3::Decoder _decoder;//TODO: par copie ???
-    std::istream &_inputStream;
+    MP3::Decoder _decoder;
     std::optional<MP3::Frame::Frame> _currentFrame;
     unsigned int _currentFrameIndex;
     unsigned int _numberOfFrames;
@@ -240,12 +239,18 @@ private:
     unsigned int _samplingRate;
 };
 
-int main(void) {
-    std::ifstream mp3Stream(/*"Mono_cbr2.mp3"*/"e2.mp3", std::ios::binary);
+int main(int argc, char *argv[]) {
+    std::string filename = (argc > 1) ? argv[1] : "Music.mp3";
 
-    MP3::Decoder mp3Decoder(mp3Stream, 0xFE, 0xFA, 3);
+    auto mp3Stream = std::make_unique<std::ifstream>(filename, std::ios::binary);
 
-    PortAudio portAudio(mp3Decoder, mp3Stream);
+    if (MP3::Decoder::isValidFormat(*mp3Stream, 3) == false) {
+        std::cout << filename << " is not a valid MP3 file\n";
+        return -1;
+    }
+
+    MP3::Decoder mp3Decoder(std::move(mp3Stream), 3);
+    PortAudio portAudio(std::move(mp3Decoder));
 
     if (portAudio.open(Pa_GetDefaultOutputDevice())) {
         if (portAudio.start()) {

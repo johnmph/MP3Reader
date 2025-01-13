@@ -6,7 +6,7 @@
 #include "Data/SynthesisFilterBank.hpp"
 #include "Data/SynthesisWindow.hpp"
 
-//TODO: bien verifier pour les conditions et le code executé pour les types de block, si mixed ou pas, ...
+
 namespace MP3::Frame {
 
     unsigned int Frame::getNumberOfChannels() const {
@@ -126,7 +126,7 @@ namespace MP3::Frame {
         }
     }
 
-    void Frame::reorderShortWindows(unsigned int const granuleIndex, unsigned int const channelIndex) {//TODO: voir si le reorder est correct ainsi : OK normalement, juste pas testé si mixedBlockFlag !
+    void Frame::reorderShortWindows(unsigned int const granuleIndex, unsigned int const channelIndex) {
     // TODO: a la place de calculer les indexs de reorder ici, avoir des tableaux constants calculés au démarrage avec une methode constexpr ! et ici on utilisera les indexs du bon tableau reorder pour reorder les données
         // Get current granule
         auto const &currentGranule = _sideInformation.getGranule(granuleIndex, channelIndex);
@@ -145,7 +145,7 @@ namespace MP3::Frame {
         unsigned int orderedSampleIndex = 0;
 
         // Browse scale factor bands
-        for (unsigned int scaleFactorBandIndex = ((std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).mixedBlockFlag == true) ? 3 : 0); scaleFactorBandIndex < 13; ++scaleFactorBandIndex) { //TODO: regarder pour le mixedBlockFlag : et voir si 3 ok
+        for (unsigned int scaleFactorBandIndex = ((std::get<SideInformationGranuleSpecialWindow>(currentGranule.window).mixedBlockFlag == true) ? 3 : 0); scaleFactorBandIndex < 13; ++scaleFactorBandIndex) { //TODO: regarder pour le mixedBlockFlag : et voir si 3 ok (car ici on parle de scaleFactorBand)
             // Get current scale factor band frequency line count
             unsigned int const scaleFactorBandFrequencyLineCount = Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][scaleFactorBandIndex] - ((scaleFactorBandIndex > 0) ? Data::frequencyLinesPerScaleFactorBandShortBlock[_header.getSamplingRateIndex()][scaleFactorBandIndex - 1] : -1);
 
@@ -336,8 +336,6 @@ namespace MP3::Frame {
     }
 
     void Frame::processMSStereo(unsigned int const granuleIndex) {
-        // TODO: tester si les blocks des 2 canaux sont de memes types sinon throw exception ?
-
         // Get intensityStereoBound
         auto const intensityStereoBound = (_header.isIntensityStereo() == true) ? getIntensityStereoBound(granuleIndex) : 576;
 
@@ -454,7 +452,7 @@ namespace MP3::Frame {
 
     void Frame::applyWindowing(SideInformationGranule const &sideInformationGranule, std::array<float, 36> &subbandValues, unsigned int const subbandIndex) const {
         // Get windowing values
-        auto const &windowingValues = Data::windowingValuesPerBlock[static_cast<unsigned int>(sideInformationGranule.blockType)];//TODO: voir si laisser ainsi avec le cast du enum ou si avoir une methode a part et attention pour les short blocks
+        auto const &windowingValues = Data::windowingValuesPerBlock[static_cast<unsigned int>(sideInformationGranule.blockType)];
 
         // Process windowing
         for (unsigned int i = 0; i < 36; ++i) {//TODO: pas bon, je ne peux pas appliquer le meme traitement pour tout si mixedBlockFlag !!!
@@ -537,7 +535,7 @@ namespace MP3::Frame {
                 }
             }
 
-            // Create U values
+            // Create U values (no need to initialize because all elements are initialized in the following loop)
             std::array<float, 512> uValues;
 
             for (unsigned int i = 0; i < 8; ++i) {
@@ -547,7 +545,7 @@ namespace MP3::Frame {
                 }
             }
 
-            // Create window values
+            // Create window values (no need to initialize because all elements are initialized in the following loop)
             std::array<float, 512> windowValues;
 
             for (unsigned int i = 0; i < 512; ++i) {

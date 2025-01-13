@@ -6,6 +6,7 @@
 #include <vector>
 #include <unordered_set>
 #include <optional>
+#include <memory>
 #include "Helper.hpp"
 #include "Frame/Header.hpp"
 #include "Frame/Frame.hpp"
@@ -13,51 +14,51 @@
 
 namespace MP3 {
     
-    //template <class TStream>//TODO: si on veut le stream géré ici
     struct Decoder {
 
-        // TODO: creer des constantes pour le versionMask et versionValue
+        static constexpr uint8_t versionMask = 0xFE;
+        static constexpr uint8_t versionValue = 0xFA;
+        
+        static bool isValidFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat);
 
-        // TODO: avoir un constructor avec plusieurs parametres (ou une struct Configuration) et avoir par exemple le nombre de frames a lire pour etre certain que c'est un bon fichier MP3
-        Decoder(std::istream &inputStream, uint8_t const versionMask, uint8_t const versionValue, unsigned int const numberOfFramesForValidFormat);
-
-        template <class TFunction>
-        void browseFramesHeader(std::istream &inputStream, TFunction &&browseFunc);
-
-        //bool isValidFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat);//TODO: (dans le cas ou on passe le stream en move avec le template parameter sur le type de stream) a mettre en static et a appeler dans le constructor et faire une exception si retourne false dans le constructor (comme dans la classe Header)
-        unsigned int getNumberOfFrames(std::istream &inputStream);
-        std::unordered_set<unsigned int> getBitrates(std::istream &inputStream);    // TODO: lazy creation et donc avoir un membre _bitrates et pareil pour la methode en dessous
-        std::unordered_set<unsigned int> getSamplingRates(std::istream &inputStream);
+        Decoder(std::unique_ptr<std::istream> inputStream, unsigned int const numberOfFramesForValidFormat);
 
         template <class TFunction>
-        Frame::Frame getFrameAtIndex(std::istream &inputStream, unsigned int const frameIndex, TFunction &&errorFunction);
+        void browseFramesHeader(TFunction &&browseFunc);
+
+        unsigned int getNumberOfFrames();
+        std::unordered_set<unsigned int> const &getBitrates();
+        std::unordered_set<unsigned int> const &getSamplingRates();
+
+        template <class TFunction>
+        Frame::Frame getFrameAtIndex(unsigned int const frameIndex, TFunction &&errorFunction);
         
     private:
 
-        struct FrameEntry {
+        static constexpr uint16_t crcPolynomial = 0x8005;
+        static constexpr uint16_t crcInitialValue = 0xFFFF;
+
+
+        struct FrameEntry {//TODO: on peut avoir aussi une version qui sauve les frame directement plutot que la position dans le fichier ainsi on garde les données en mémoire, et on peut choisir ce que l'on veut via un template parameter ou un truc dans le genre
             unsigned int positionInBytes;
             unsigned int sizeInBytes;
         };
 
-        /*struct BitReservoir {
-            std::vector<uint8_t> data;
-            unsigned int startingFrameIndex;
-            unsigned int positionInBytes;
-        };*/
 
-        bool checkFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat);
-        bool getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation, std::vector<uint8_t> &frameData);
-        uint16_t getCRCIfExist(std::istream &inputStream, Frame::Header const &frameHeader);
+        static std::optional<FrameEntry> findFirstValidFrame(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat);
+        static std::optional<std::array<uint8_t, Frame::Header::headerSize>> tryToReadNextFrameHeaderData(std::istream &inputStream);
+
+        bool getFrameDataFromBitReservoir(unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation, std::vector<uint8_t> &frameData);
+        uint16_t getCRCIfExist(Frame::Header const &frameHeader);
         uint16_t calculateCRC(std::array<uint8_t, 4> const &headerData, std::vector<uint8_t> const &sideInformationData);
-        std::optional<Frame::Header> tryToGetFrameHeaderAtIndex(std::istream &inputStream, unsigned int const frameIndex);
-        std::optional<std::array<uint8_t, Frame::Header::headerSize>> tryToReadNextFrameHeaderData(std::istream &inputStream) const;
+        std::optional<Frame::Header> tryToGetFrameHeaderAtIndex(unsigned int const frameIndex);
 
-        uint8_t const _versionMask;
-        uint8_t const _versionValue;
+        std::unique_ptr<std::istream> _inputStream;
         std::vector<FrameEntry> _frameEntries;
-        //BitReservoir _bitReservoir;//TODO: voir si besoin
         std::array<std::array<float, 576>, 2> _framesBlocksSubbandsOverlappingValues;
         std::array<std::array<float, 1024>, 2> _framesShiftedAndMatrixedSubbandsValues;
+        std::unordered_set<unsigned int> _bitrates;
+        std::unordered_set<unsigned int> _samplingRates;
     };
 
 

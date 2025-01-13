@@ -18,7 +18,7 @@ template <typename TValue, typename TData>
 TValue getBitsAtIndex(TData const &data, unsigned int &index, unsigned int size) {
     assert(size <= (sizeof(TValue) * 8));
 
-    //TODO: tester si on ne depasse pas la taille de data avec index
+    //TODO: tester si on ne depasse pas la taille de data avec index : c'est fait mais voir si pas plutot un assert ?
     
     TValue value = 0;
 
@@ -34,14 +34,14 @@ TValue getBitsAtIndex(TData const &data, unsigned int &index, unsigned int size)
 }
 
 template <typename TContainer, class TFunction>
-constexpr TContainer transformContainer(TContainer const &input, TFunction &&function) {    //TODO: ATTENTION: si vector, taille pas initialisée
-    TContainer output = {};
-
-    for (std::size_t index = 0; index < input.size(); ++index) {
-        output[index] = function(input[index]);
+constexpr TContainer transformContainer(TContainer container, TFunction &&function) {
+    // Browse container
+    for (std::size_t index = 0; index < container.size(); ++index) {
+        // Apply transform function
+        container[index] = function(container[index]);
     }
 
-    return output;
+    return container;
 }
 
 template <typename TValue, TValue Polynomial, TValue InitialValue>

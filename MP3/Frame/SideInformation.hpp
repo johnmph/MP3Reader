@@ -50,7 +50,7 @@ namespace MP3::Frame {
         template <class TFunction>
         SideInformation(Header const &header, std::vector<uint8_t> const &data, TFunction &&errorFunction);
 
-        std::vector<uint8_t> const &getData() const;//TODO: enlever et aussi le membre _data ? (et si on veut rester consistent et enlever aussi dans Header, il faudra refaire la methode qui renvoie un std pair avec Header + HeaderData)
+        std::vector<uint8_t> const &getData() const;//TODO: enlever et aussi le membre _data si pas besoin dans les classes d'erreurs ? (et si on veut rester consistent et enlever aussi dans Header, il faudra refaire la methode qui renvoie un std pair avec Header + HeaderData)
         unsigned int getMainDataBegin() const;
         unsigned int getMainDataSizeInBits() const;
         unsigned int getPrivateBits() const;

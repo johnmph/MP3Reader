@@ -47,11 +47,9 @@ void Frame::extractMainData(TFunction &&errorFunction) {
 
         // Process stereo (need to be done when all channels are decoded)
         processStereo(granuleIndex);
-    //}//TODO: voir si ok en regroupant les boucles, normalement oui
+        
+        // What is following can't be done before finishing processStereo, it's why we separated it to another loop
 
-    // What is following can't be done before finishing processStereo, it's why we separated it to another loop
-    // Browse granules
-    //for (unsigned int granuleIndex = 0; granuleIndex < 2; ++granuleIndex) {
         // Browse channels
         for (unsigned int channelIndex = 0; channelIndex < _header.getNumberOfChannels(); ++channelIndex) {
             // Synthesis FilterBank
@@ -178,7 +176,7 @@ std::pair<std::optional<TValueType>, unsigned int> Frame::decodeHuffmanCode(unsi
         }
     }
 
-    return std::make_pair(std::optional<TValueType> {}, code);
+    return std::make_pair(std::nullopt, code);
 }
 
 template <class TScaleFactorBandTable>

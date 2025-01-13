@@ -18,7 +18,7 @@ namespace MP3::Helper {
     TValue getBitsAtIndex(TData const &data, unsigned int &index, unsigned int size);
     
     template <typename TContainer, class TFunction>
-    constexpr TContainer transformContainer(TContainer const &input, TFunction &&function);
+    constexpr TContainer transformContainer(TContainer container, TFunction &&function);
 
     template <typename TValue, TValue Polynomial, TValue InitialValue>
     TValue calculateCRC(std::vector<uint8_t> const &data);

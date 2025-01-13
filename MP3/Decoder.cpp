@@ -5,20 +5,32 @@
 #include "Decoder.hpp"
 #include "Frame/Data/Header.hpp"
 
-//TODO: voir si avoir une structure pour toutes les erreurs rencontrées pour les avoir dans des flags qu'on puisse lire et meme peut etre avoir une structure avec des flags masks pour qu'on puisse definir si telle erreur est critique et doit arreter la lecture ou non, a voir si ca ou simple throw ou simple code erreur a retourner
+
 namespace MP3 {
 
-    Decoder::Decoder(std::istream &inputStream, uint8_t const versionMask, uint8_t const versionValue, unsigned int const numberOfFramesForValidFormat) : _versionMask(versionMask), _versionValue(versionValue), _framesBlocksSubbandsOverlappingValues({}), _framesShiftedAndMatrixedSubbandsValues({}) {//TODO: voir pour empty initializers, si pas bon, mettre std fill dans le constructor
-        // Check if format is invalid
-        if (checkFormat(inputStream, numberOfFramesForValidFormat) == false) {
-            throw Error::BadMP3Format(*this, inputStream);//TODO: attention la reference this sera invalide !!!
-        }
+    bool Decoder::isValidFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat) {
+        // Format is valid if we found a first valid frame
+        return findFirstValidFrame(inputStream, numberOfFramesForValidFormat).has_value();
     }
 
-    unsigned int Decoder::getNumberOfFrames(std::istream &inputStream) {
+    Decoder::Decoder(std::unique_ptr<std::istream> inputStream, unsigned int const numberOfFramesForValidFormat) : _inputStream(std::move(inputStream)), _framesBlocksSubbandsOverlappingValues({}), _framesShiftedAndMatrixedSubbandsValues({}) {
+        // Get first valid frame
+        auto firstValidFrame = findFirstValidFrame((*_inputStream), numberOfFramesForValidFormat);
+
+        // If first valid frame not found
+        if (firstValidFrame.has_value() == false) {
+            // Format is invalid
+            throw Error::BadMP3Format(*this, *_inputStream);//TODO: attention la reference this sera invalide !!!
+        }
+
+        // Set first valid frame
+        _frameEntries.push_back((*firstValidFrame));
+    }
+
+    unsigned int Decoder::getNumberOfFrames() {
         unsigned int frameCount = 0;
 
-        browseFramesHeader(inputStream, [&inputStream, &frameCount](Frame::Header const &frameHeader) {
+        browseFramesHeader([&frameCount](Frame::Header const &frameHeader) {
             // Increment frameCount
             ++frameCount;
 
@@ -29,39 +41,42 @@ namespace MP3 {
         return frameCount;
     }
 
-    std::unordered_set<unsigned int> Decoder::getBitrates(std::istream &inputStream) {
-        std::unordered_set<unsigned int> bitrates;
+    std::unordered_set<unsigned int> const &Decoder::getBitrates() {
+        // Lazy creation
+        if (_bitrates.empty() == true) {
+            browseFramesHeader([&bitrates = _bitrates](Frame::Header const &frameHeader) {
+                // Add current bitrate
+                bitrates.insert(frameHeader.getBitrate());
 
-        browseFramesHeader(inputStream, [&inputStream, &bitrates](Frame::Header const &frameHeader) {
-            // Add current bitrate
-            bitrates.insert(frameHeader.getBitrate());
+                // Continue
+                return true;
+            });
+        }
 
-            // Continue
-            return true;
-        });
-
-        return bitrates;
+        return _bitrates;
     }
 
-    std::unordered_set<unsigned int> Decoder::getSamplingRates(std::istream &inputStream) {
-        std::unordered_set<unsigned int> samplingRates;
+    std::unordered_set<unsigned int> const &Decoder::getSamplingRates() {
+        // Lazy creation
+        if (_samplingRates.empty() == true) {
+            browseFramesHeader([&samplingRates = _samplingRates](Frame::Header const &frameHeader) {
+                // Add current sampling rate
+                samplingRates.insert(frameHeader.getSamplingRate());
 
-        browseFramesHeader(inputStream, [&inputStream, &samplingRates](Frame::Header const &frameHeader) {
-            // Add current sampling rate
-            samplingRates.insert(frameHeader.getSamplingRate());
+                // Continue
+                return true;
+            });
+        }
 
-            // Continue
-            return true;
-        });
-
-        return samplingRates;
+        return _samplingRates;
     }
 
-    bool Decoder::checkFormat(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat) {
-        inputStream.clear();//TODO: a voir
-
+    std::optional<Decoder::FrameEntry> Decoder::findFirstValidFrame(std::istream &inputStream, unsigned int const numberOfFramesForValidFormat) {
         // Set stream cursor to beginning
+        inputStream.clear();
         inputStream.seekg(0);
+
+        std::optional<Decoder::FrameEntry> frameEntry;
         
         // Create headerData
         std::optional<std::array<uint8_t, Frame::Header::headerSize>> headerData;
@@ -71,8 +86,11 @@ namespace MP3 {
             // Try to synchronize to next frame
             headerData = tryToReadNextFrameHeaderData(inputStream);
 
+            // If frame not found
             if (headerData.has_value() == false) {
-                return false;
+                // Reset frameEntry and exit loop
+                frameEntry = std::nullopt;
+                break;
             }
 
             // Set stream cursor at header start
@@ -88,11 +106,11 @@ namespace MP3 {
             }
 
             // Create header
-            Frame::Header header((*headerData), _versionMask, _versionValue);
+            Frame::Header header((*headerData), versionMask, versionValue);
 
-            // Save to array if it is the first header (and possibly reset it before if bad header found before)
+            // Save first possible valid frame header to frameEntry
             if (currentFrameIndex == 0) {
-                _frameEntries = { { currentPosition, header.getFrameLength() } };
+                frameEntry = { currentPosition, header.getFrameLength() };
             }
 
             // Set stream cursor to beginning of next frame
@@ -103,10 +121,34 @@ namespace MP3 {
         }
 
         // Valid
-        return true;
+        return frameEntry;
     }
 
-    bool Decoder::getFrameDataFromBitReservoir(std::istream &inputStream, unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation, std::vector<uint8_t> &frameData) {
+    std::optional<std::array<uint8_t, Frame::Header::headerSize>> Decoder::tryToReadNextFrameHeaderData(std::istream &inputStream) {
+        // Create headerData
+        std::array<uint8_t, Frame::Header::headerSize> headerData;
+
+        // Read 4 first bytes if possible
+        inputStream.read(reinterpret_cast<char *>(headerData.data()), headerData.size());
+
+        // Browse input stream
+        while (inputStream.good() == true) {
+            // Check if header found
+            if (Frame::Header::isValidHeader(headerData, versionMask, versionValue) == true) {
+                // Found
+                return headerData;
+            }
+
+            // Shift left the array and get next byte
+            std::rotate(std::begin(headerData), std::next(std::begin(headerData), 1), std::end(headerData));
+            headerData[3] = inputStream.get();
+        }
+
+        // Not found
+        return {};
+    }
+
+    bool Decoder::getFrameDataFromBitReservoir(unsigned int const frameIndex, Frame::SideInformation const &frameSideInformation, std::vector<uint8_t> &frameData) {
         bool result = true;
 
         // Calculate current bit reservoir frame index
@@ -116,16 +158,27 @@ namespace MP3 {
         std::optional<Frame::Header> bitReservoirCurrentFrameHeader;
         auto beginOffset = frameSideInformation.getMainDataBegin();
 
+        unsigned int bytesReadStart = 0;
+
         for (;;) {
             // If first frame and we don't have all data, error
             if (bitReservoirCurrentFrameIndex == 0) {
+                // Indicate that result is incorrect
                 result = false;
-                return {};//TODO: a la place de quitter avec une erreur sans rien lire, lire la partie qu'on sait et laisser des 0 au debut sur tout ce qu'on n'a pas su lire mais quand meme notifier l'erreur pour qu'on puisse thrower dans la methode appelante tout en ayant les données dispo pour l'exception
+
+                // Read first frame header
+                bitReservoirCurrentFrameHeader = tryToGetFrameHeaderAtIndex(0);
+
+                // We start after invalid data
+                bytesReadStart = beginOffset;//TODO: voir si ok
+
+                // Exit loop
+                break;
             }
 
             // Go to previous frame
             --bitReservoirCurrentFrameIndex;
-            bitReservoirCurrentFrameHeader = tryToGetFrameHeaderAtIndex(inputStream, bitReservoirCurrentFrameIndex);
+            bitReservoirCurrentFrameHeader = tryToGetFrameHeaderAtIndex(bitReservoirCurrentFrameIndex);
 
             // Check if we have enough data
             if ((*bitReservoirCurrentFrameHeader).getDataSize() >= beginOffset) {
@@ -138,27 +191,31 @@ namespace MP3 {
         }
 
         // Loop to read data
-        for (unsigned int bytesRead = 0; bytesRead < frameData.size();) {
+        for (unsigned int bytesRead = bytesReadStart; bytesRead < frameData.size();) {
             // Set position of stream to data of bitReservoir current frame
-            inputStream.seekg((*bitReservoirCurrentFrameHeader).getCRCSize() + (*bitReservoirCurrentFrameHeader).getSideInformationSize() + (((bitReservoirCurrentFrameIndex < frameIndex) && (bytesRead == 0)) ? ((*bitReservoirCurrentFrameHeader).getDataSize() - beginOffset) : 0), std::ios::cur);
+            _inputStream->seekg((*bitReservoirCurrentFrameHeader).getCRCSize() + (*bitReservoirCurrentFrameHeader).getSideInformationSize() + (((bitReservoirCurrentFrameIndex < frameIndex) && (bytesRead == 0)) ? ((*bitReservoirCurrentFrameHeader).getDataSize() - beginOffset) : 0), std::ios::cur);
 
             // Calculate available bytes
             unsigned int const limitToRead = ((bitReservoirCurrentFrameIndex < frameIndex) && (bytesRead == 0)) ? beginOffset : (*bitReservoirCurrentFrameHeader).getDataSize();
             unsigned int const bytesAvailable = ((frameData.size() - bytesRead) > limitToRead) ? limitToRead : (frameData.size() - bytesRead);
 
             // Read available bytes
-            inputStream.read(reinterpret_cast<char *>(&frameData.data()[bytesRead]), bytesAvailable);
+            _inputStream->read(reinterpret_cast<char *>(&frameData.data()[bytesRead]), bytesAvailable);
             bytesRead += bytesAvailable;
 
             // Go to next frame
             ++bitReservoirCurrentFrameIndex;
-            bitReservoirCurrentFrameHeader = tryToGetFrameHeaderAtIndex(inputStream, bitReservoirCurrentFrameIndex);
+            bitReservoirCurrentFrameHeader = tryToGetFrameHeaderAtIndex(bitReservoirCurrentFrameIndex);
+
+            // Get possible ancillary data
+            /*if (bytesRead >= frameData.size()) {//TODO: terminer mais probleme, il faut le side information de bitReservoirCurrentFrameHeader et donc il faut faire tout le meme code qu'il y a dans getFrameAtIndex, donc refactoriser ce code pour le reutiliser ici d'abord !
+            }*/
         }
 
         return result;
     }
 
-    uint16_t Decoder::getCRCIfExist(std::istream &inputStream, Frame::Header const &frameHeader) {
+    uint16_t Decoder::getCRCIfExist(Frame::Header const &frameHeader) {
         // If no CRC protected, exit
         if (frameHeader.isCRCProtected() == false) {
             return 0;
@@ -166,7 +223,7 @@ namespace MP3 {
 
         // Get stored CRC
         uint16_t storedCRC;
-        inputStream.read(reinterpret_cast<char *>(&storedCRC), frameHeader.getCRCSize());
+        _inputStream->read(reinterpret_cast<char *>(&storedCRC), frameHeader.getCRCSize());
 
         // Convert in little endianness
         storedCRC = Helper::revertEndianness(storedCRC);
@@ -186,14 +243,15 @@ namespace MP3 {
         std::copy(std::cbegin(sideInformationData), std::cend(sideInformationData), std::next(std::begin(data), 2));
 
         // Calculate CRC
-        auto calculatedCRC = Helper::calculateCRC<uint16_t, 0x8005, 0xFFFF>(data);//TODO: mettre les valeurs dans des constantes
+        auto calculatedCRC = Helper::calculateCRC<uint16_t, crcPolynomial, crcInitialValue>(data);
 
         // Return it
         return calculatedCRC;
     }
 
-    std::optional<Frame::Header> Decoder::tryToGetFrameHeaderAtIndex(std::istream &inputStream, unsigned int const frameIndex) {//TODO: a modifier car les frames doivent se suivre obligatoirement !!!
-        inputStream.clear();//TODO: a voir
+    std::optional<Frame::Header> Decoder::tryToGetFrameHeaderAtIndex(unsigned int const frameIndex) {
+        // Reset input stream
+        _inputStream->clear();
 
         // Create headerData
         std::optional<std::array<uint8_t, Frame::Header::headerSize>> headerData;
@@ -202,56 +260,37 @@ namespace MP3 {
         if (_frameEntries.size() <= frameIndex) {
             for (unsigned int currentFrameIndex = _frameEntries.size(); currentFrameIndex <= frameIndex; ++currentFrameIndex) {
                 // Set stream cursor to beginning of current frame
-                inputStream.seekg((currentFrameIndex > 0) ? (_frameEntries[currentFrameIndex - 1].positionInBytes + _frameEntries[currentFrameIndex - 1].sizeInBytes) : 0);
+                _inputStream->seekg((currentFrameIndex > 0) ? (_frameEntries[currentFrameIndex - 1].positionInBytes + _frameEntries[currentFrameIndex - 1].sizeInBytes) : 0);
 
                 // Try to synchronize to next frame
-                headerData = tryToReadNextFrameHeaderData(inputStream);
+                headerData = tryToReadNextFrameHeaderData((*_inputStream));
 
+                // If frame not found, exit
                 if (headerData.has_value() == false) {
-                    return {};
+                    return std::nullopt;
                 }
 
                 // Create header
-                Frame::Header header((*headerData), _versionMask, _versionValue);
+                Frame::Header header((*headerData), versionMask, versionValue);
 
                 // Save to array
-                _frameEntries.push_back({ static_cast<unsigned int>(inputStream.tellg()) - static_cast<unsigned int>((*headerData).size()), header.getFrameLength() });
+                _frameEntries.push_back({ static_cast<unsigned int>(_inputStream->tellg()) - static_cast<unsigned int>((*headerData).size()), header.getFrameLength() });
             }
+        } else {
+            // Set default value of optional
+            headerData = std::array<uint8_t, Frame::Header::headerSize> {};
         }
 
         // Set stream cursor to beginning of frame
-        inputStream.seekg(_frameEntries[frameIndex].positionInBytes);
+        _inputStream->seekg(_frameEntries[frameIndex].positionInBytes);
 
         // Read frame header
-        inputStream.read(reinterpret_cast<char *>((*headerData).data()), (*headerData).size());
+        _inputStream->read(reinterpret_cast<char *>((*headerData).data()), (*headerData).size());
 
         // Create frame header
-        return Frame::Header((*headerData), _versionMask, _versionValue);
+        return Frame::Header((*headerData), versionMask, versionValue);
     }
     
-    std::optional<std::array<uint8_t, Frame::Header::headerSize>> Decoder::tryToReadNextFrameHeaderData(std::istream &inputStream) const {
-        // Create headerData
-        std::array<uint8_t, Frame::Header::headerSize> headerData;
-
-        // Read 4 first bytes if possible
-        inputStream.read(reinterpret_cast<char *>(headerData.data()), headerData.size());
-
-        // Browse input stream
-        while (inputStream.good()) {
-            // Check if header found
-            if (Frame::Header::isValidHeader(headerData, _versionMask, _versionValue) == true) {
-                // Found
-                return headerData;
-            }
-
-            // Shift left the array and get next byte
-            std::rotate(headerData.begin(), headerData.begin() + 1, headerData.end());
-            headerData[3] = inputStream.get();
-        }
-
-        // Not found
-        return {};
-    }
 
     Error::DecoderException::DecoderException(Decoder &decoder) :_decoder(decoder) {
     }
