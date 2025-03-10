@@ -98,6 +98,8 @@ namespace MP3::Frame {
         struct FrameException : std::exception {
             FrameException(Frame &frame);
 
+            Frame const &getFrame() const;
+
         private:
             Frame &_frame;//TODO: faire attention avec cette reference car une exception dans le constructor invalide cette reference et donc soit separer error et exception soit ne pas sauver une reference sur frame ici !!!
         };

@@ -159,6 +159,9 @@ void Frame::extractFrequencyLineValues(unsigned int const granuleIndex, unsigned
         // Add 0 to currentFrequencyLineValues
         currentFrequencyLineValues[frequencyLineIndex] = 0;
     }
+
+    // Correct dataBitIndex in case we didn't read all the data because we reach 576 frequency lines first (stuffing bits to be discarded)
+    _dataBitIndex = granuleStartDataBitIndex + currentGranule.par23Length;
 }
 
 template <class TValueType>

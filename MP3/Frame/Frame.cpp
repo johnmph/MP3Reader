@@ -451,16 +451,19 @@ namespace MP3::Frame {
     }
 
     void Frame::applyWindowing(SideInformationGranule const &sideInformationGranule, std::array<float, 36> &subbandValues, unsigned int const subbandIndex) const {
+        // Check if we are in special window, DON'T change order of the conditions because sideInformationGranule.window is a SideInformationGranuleSpecialWindow only of windowSwitchingFlag is true !
+        bool const inSpecialWindow = (sideInformationGranule.windowSwitchingFlag == true) && ((std::get<SideInformationGranuleSpecialWindow>(sideInformationGranule.window).mixedBlockFlag == false) || (subbandIndex >= 2));
+        
         // Get windowing values
-        auto const &windowingValues = Data::windowingValuesPerBlock[static_cast<unsigned int>(sideInformationGranule.blockType)];
+        auto const &windowingValues = Data::windowingValuesPerBlock[(inSpecialWindow == true) ? static_cast<unsigned int>(sideInformationGranule.blockType) : 0];//TODO: voir si ok ainsi avec mixedBlockFlag
 
         // Process windowing
-        for (unsigned int i = 0; i < 36; ++i) {//TODO: pas bon, je ne peux pas appliquer le meme traitement pour tout si mixedBlockFlag !!!
+        for (unsigned int i = 0; i < 36; ++i) {
             subbandValues[i] *= windowingValues[i];
         }
 
         // Process overlapping between short blocks if necessary
-        if ((sideInformationGranule.blockType == BlockType::ShortWindows3) && ((std::get<SideInformationGranuleSpecialWindow>(sideInformationGranule.window).mixedBlockFlag == false) || (subbandIndex >= 2))) {
+        if ((sideInformationGranule.blockType == BlockType::ShortWindows3) && (inSpecialWindow == true)) {
             // Second window First Half to First window Second Half + Second window First Half
             for (unsigned int i = 12; i < 18; ++i) {
                 subbandValues[i] += subbandValues[i - 6];
@@ -565,6 +568,10 @@ namespace MP3::Frame {
 
 
     Error::FrameException::FrameException(Frame &frame) :_frame(frame) {
+    }
+    
+    Frame const &Error::FrameException::getFrame() const {
+        return _frame;
     }
 
 }

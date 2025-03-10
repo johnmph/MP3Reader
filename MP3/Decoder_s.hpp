@@ -55,7 +55,7 @@ Frame::Frame Decoder::getFrameAtIndex(unsigned int const frameIndex, TFunction &
         }
     }
 
-    // Create frame side informations
+    // Create frame side information
     Frame::SideInformation const frameSideInformation((*frameHeader), frameSideInformationData, std::forward<TFunction>(errorFunction));
 
     // Get frame data from bit reservoir

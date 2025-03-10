@@ -176,11 +176,19 @@ private:
                 //if (_inputStream.good() == false) {
                 //    return paAbort;
                 //}
+/*
+if (_currentFrameIndex == 13) {
+    int xxx= 0;
+}*/
 
                 // Get current frame
-                _currentFrame.emplace(_decoder.getFrameAtIndex(_currentFrameIndex, [this](auto const &error) {
-                    return processError(error);
-                }));
+                try {
+                    _currentFrame.emplace(_decoder.getFrameAtIndex(_currentFrameIndex, [this](auto const &error) {
+                        return processError(error);
+                    }));
+                } catch (...) {
+                    // Repeat last correct frame if we found a bad frame
+                }
 
                 // Get number of channels
                 _currentFrameNumberOfChannels = (*_currentFrame).getNumberOfChannels();
@@ -190,8 +198,10 @@ private:
             }
 
             // Copy value to audio buffer
-            *out++ = (*_currentFrame).getPCMSamples(0)[_currentPositionInFrame];
-            *out++ = (*_currentFrame).getPCMSamples(_currentFrameNumberOfChannels - 1)[_currentPositionInFrame];
+            if (_currentFrame.has_value() == true) {
+                *out++ = (*_currentFrame).getPCMSamples(0)[_currentPositionInFrame];
+                *out++ = (*_currentFrame).getPCMSamples(_currentFrameNumberOfChannels - 1)[_currentPositionInFrame];    
+            }
 
             // Check position in frame
             ++_currentPositionInFrame;
@@ -240,7 +250,7 @@ private:
 };
 
 int main(int argc, char *argv[]) {
-    std::string filename = (argc > 1) ? argv[1] : "Music.mp3";
+    std::string filename = (argc > 1) ? argv[1] : "2-18 Kokomo.mp3";
 
     auto mp3Stream = std::make_unique<std::ifstream>(filename, std::ios::binary);
 
