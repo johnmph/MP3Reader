@@ -82,6 +82,7 @@ namespace MP3 {
         std::optional<std::array<uint8_t, Frame::Header::headerSize>> headerData;
 
         unsigned int lastPosition = 0;
+        unsigned int currentPosition = 0;
         for (unsigned int currentFrameIndex = 0; currentFrameIndex < numberOfFramesForValidFormat; ++currentFrameIndex) {
             // Try to synchronize to next frame
             headerData = tryToReadNextFrameHeaderData(inputStream);
@@ -95,26 +96,32 @@ namespace MP3 {
 
             // Set stream cursor at header start
             inputStream.seekg(-(*headerData).size(), std::ios::cur);
+            
+            // Check if it is not a consecutive frame
+            if ((currentFrameIndex > 0) && (inputStream.tellg() != lastPosition)) {
+                // Restart by passing to next byte (-1 to currentFrameIndex to have it = 0 when continue is applied)
+                currentFrameIndex = -1;
+                inputStream.seekg(currentPosition + 1);
+
+                continue;
+            }
 
             // Get current position in stream
-            unsigned int const currentPosition = inputStream.tellg();
-
-            // Check if it is not a consecutive frame
-            if (currentPosition != lastPosition) {
-                // Restart
-                currentFrameIndex = 0;
-            }
+            currentPosition = inputStream.tellg();
 
             // Create header
             Frame::Header header((*headerData), versionMask, versionValue);
 
+            // Get frame length (or 1 in case of incorrect header)
+            auto const frameLength = std::max<unsigned int>(header.getFrameLength(), 1);//TODO: une frame length = 0 ne peut pas arriver ainsi car j'ai le test dans le isValid pour etre sur que bitrate et samplingrate sont ok, mais dans le cas ou je retire ces tests et que je les mets dans decode ! reflechir car si je les mets la, il faut trouver un moyen pour pouvoir corriger avec toutes les données nécessaires qu'on a pas dans header !
+
             // Save first possible valid frame header to frameEntry
             if (currentFrameIndex == 0) {
-                frameEntry = { currentPosition, header.getFrameLength() };
+                frameEntry = { currentPosition, frameLength };
             }
 
-            // Set stream cursor to beginning of next frame
-            inputStream.seekg(header.getFrameLength(), std::ios::cur);//TODO: voir si getFrameLength retourne 0
+            // Set stream cursor to beginning of next frame or to next byte if frame has no length (in case of incorrect header)
+            inputStream.seekg(frameLength, std::ios::cur);
 
             // Get last position
             lastPosition = inputStream.tellg();
@@ -274,7 +281,7 @@ namespace MP3 {
                 Frame::Header header((*headerData), versionMask, versionValue);
 
                 // Save to array
-                _frameEntries.push_back({ static_cast<unsigned int>(_inputStream->tellg()) - static_cast<unsigned int>((*headerData).size()), header.getFrameLength() });
+                _frameEntries.push_back({ static_cast<unsigned int>(_inputStream->tellg()) - static_cast<unsigned int>((*headerData).size()), std::max<unsigned int>(header.getFrameLength(), 1) });
             }
         } else {
             // Set default value of optional

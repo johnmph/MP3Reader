@@ -50,7 +50,7 @@ namespace MP3::Frame {
     }
 
     unsigned int Header::getFrameLength() const {
-        return ((144000 * getBitrate()) / getSamplingRate()) + ((_isPadded) ? 1 : 0);
+        return ((144000 * getBitrate()) / getSamplingRate()) + ((_isPadded) ? 1 : 0);//TODO: si retourne 0 car mauvais header (qui ne peut arriver que si on retire les tests des sampling rate / bit rate dans le isValidHeader pour les mettre dans le decode), faut t'il retourner 1 ? (car ainsi on avance meme si le header est mauvais) ou bien laisser ainsi et avancer dans le decoder partout ou on appelle getFrameLength ??
     }
 
     unsigned int Header::getCRCSize() const {
@@ -123,7 +123,7 @@ namespace MP3::Frame {
     }
 
     void Header::decode() {
-        unsigned int dataBitIndex = 15;//TODO: pour tester on a mis 14 et 16 et on est dans une boucle infinie ? a verifier car si fichier mal formé on peut bloquer ?
+        unsigned int dataBitIndex = 15;
 
         // Set isCRCProtected
         _isCRCProtected = Helper::getBitsAtIndex<unsigned int>(_data, dataBitIndex, 1) == 0x0;

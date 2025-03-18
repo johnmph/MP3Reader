@@ -172,15 +172,6 @@ private:
         for (unsigned int i = 0; (i < framesPerBuffer) && (_currentFrameIndex < _numberOfFrames); i++) {
             // Get a new frame if necessary
             if (_currentPositionInFrame == 0) {
-                // Check if stream is good
-                //if (_inputStream.good() == false) {
-                //    return paAbort;
-                //}
-/*
-if (_currentFrameIndex == 13) {
-    int xxx= 0;
-}*/
-
                 // Get current frame
                 try {
                     _currentFrame.emplace(_decoder.getFrameAtIndex(_currentFrameIndex, [this](auto const &error) {
@@ -207,7 +198,7 @@ if (_currentFrameIndex == 13) {
             ++_currentPositionInFrame;
             //_currentPositionInFrame += 2;//TODO: jouer a la vitesse x2
 
-            if (_currentPositionInFrame > 1151) {
+            if (_currentPositionInFrame > 1151) {//TODO: remplacer > 1151 par >= (*_currentFrame).getFrameSize() mais s'assurer que current frame a une valeur comme c'est un optionnel
                 _currentPositionInFrame = 0;
             }
         }
